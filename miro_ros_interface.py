@@ -15,6 +15,8 @@ import numpy as np
 import miro2 as miro
 import rospy
 
+# Set publisher queue size
+QUEUE_SIZE = 10
 
 class MiroClient:
     def __init__(self):
@@ -25,7 +27,10 @@ class MiroClient:
         # Set topic root
         topic_root = "/" + os.getenv("MIRO_ROBOT_NAME")
 
-        # Subscribe to ROS topics
+        # Initialise ROS node
+        rospy.init_node("MiRo_ROS_interface", anonymous=True)
+
+        # SUBSCRIBERS
         # TODO: Detect face
         # TODO: Detect ball
         # Core: Cognitive state (Demo mode only)
@@ -69,6 +74,11 @@ class MiroClient:
         self.sensors_caml = None
         self.sensors_camr = None
 
+        # PUBLISHERS
+        self.pub_cmd_vel = rospy.Publisher(topic_root + '/control/cmd_vel', TwistStamped, queue_size=QUEUE_SIZE)
+        self.pub_cos = rospy.Publisher(topic_root + 'control/cosmetic_joints', Float32MultiArray, queue_size=QUEUE_SIZE)
+
+    # SUBSCRIBER callbacks
     def callback_core_state(self, data):
         # FIXME: Time of day seems to be integrated into state now
         self.core_affect = data
@@ -150,3 +160,26 @@ class MiroClient:
     def process_priw(frame):
         # Get monochrome image
         return Im.frombytes('L', (1, 256), np.fromstring(frame.data, np.uint8), 'raw')
+
+    # PUBLISHER functions
+
+    # def pub_cosmetic_eyes(self, eyel, eyer):
+    #     # droop, wag, eyel, eyer, earl, earr
+    #
+    #     # Initialise cosmetic joints
+    #     cos_joints = Float32MultiArray()
+    #     cos_joints.data = [None, None, eyel, eyer, None, None]
+    #
+    #     self.pub_cos.publish(cos_joints.data)
+
+    # Publish wheel speed submitted in m/s for each wheel
+    def pub_velocity(self, l_whl, r_whl):
+        # Convert wheel speed to command velocity (m/sec, Rad/sec)
+        (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([l_whl, r_whl])
+
+        # Construct ROS message
+        vel = TwistStamped()
+        vel.twist.linear.x = dr
+        vel.twist.angular.z = dtheta
+
+        self.pub_cmd_vel.publish(vel)
