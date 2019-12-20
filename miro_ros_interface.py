@@ -76,7 +76,7 @@ class MiroClient:
 
         # PUBLISHERS
         self.pub_cmd_vel = rospy.Publisher(topic_root + '/control/cmd_vel', TwistStamped, queue_size=QUEUE_SIZE)
-        self.pub_cos = rospy.Publisher(topic_root + 'control/cosmetic_joints', Float32MultiArray, queue_size=QUEUE_SIZE)
+        self.pub_cos = rospy.Publisher(topic_root + '/control/cosmetic_joints', Float32MultiArray, queue_size=QUEUE_SIZE)
 
     # SUBSCRIBER callbacks
     def callback_core_state(self, data):
@@ -162,20 +162,20 @@ class MiroClient:
         return Im.frombytes('L', (1, 256), np.fromstring(frame.data, np.uint8), 'raw')
 
     # PUBLISHER functions
+    # Publish eyelid positions (1 = closed, 0 = open)
+    def pub_cosmetic_eyes(self, eye_l, eye_r):
+        # Initialise cosmetic joints
+        cos_joints = Float32MultiArray()
+        # FIXME: Get current value for other cosmetic joints
+        # droop, wag, eyel, eyer, earl, earr
+        cos_joints.data = [0, 0.5, eye_l, eye_r, 0.3, 0.3]
 
-    # def pub_cosmetic_eyes(self, eyel, eyer):
-    #     # droop, wag, eyel, eyer, earl, earr
-    #
-    #     # Initialise cosmetic joints
-    #     cos_joints = Float32MultiArray()
-    #     cos_joints.data = [None, None, eyel, eyer, None, None]
-    #
-    #     self.pub_cos.publish(cos_joints.data)
+        self.pub_cos.publish(cos_joints)
 
-    # Publish wheel speed submitted in m/s for each wheel
-    def pub_velocity(self, l_whl, r_whl):
+    # Publish wheel speeds (m/s)
+    def pub_velocity(self, whl_l, whl_r):
         # Convert wheel speed to command velocity (m/sec, Rad/sec)
-        (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([l_whl, r_whl])
+        (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([whl_l, whl_r])
 
         # Construct ROS message
         vel = TwistStamped()
