@@ -11,6 +11,7 @@ from PIL import ImageOps
 
 # Other imports
 import os
+import math
 import numpy as np
 import miro2 as miro
 import rospy
@@ -77,6 +78,7 @@ class MiroClient:
         # PUBLISHERS
         self.pub_cmd_vel = rospy.Publisher(topic_root + '/control/cmd_vel', TwistStamped, queue_size=QUEUE_SIZE)
         self.pub_cos = rospy.Publisher(topic_root + '/control/cosmetic_joints', Float32MultiArray, queue_size=QUEUE_SIZE)
+        self.pub_kin = rospy.Publisher(topic_root + '/control/kinematic_joints', JointState, queue_size=QUEUE_SIZE)
 
     # SUBSCRIBER callbacks
     def callback_core_state(self, data):
@@ -162,15 +164,23 @@ class MiroClient:
         return Im.frombytes('L', (1, 256), np.fromstring(frame.data, np.uint8), 'raw')
 
     # PUBLISHER functions
-    # Publish eyelid positions (1 = closed, 0 = open)
-    def pub_cosmetic_eyes(self, eye_l, eye_r):
-        # Initialise cosmetic joints
-        cos_joints = Float32MultiArray()
-        # FIXME: Get current value for other cosmetic joints
-        # droop, wag, eyel, eyer, earl, earr
-        cos_joints.data = [0, 0.5, eye_l, eye_r, 0.3, 0.3]
+    # # Publish eyelid positions (1 = closed, 0 = open)
+    # def pub_cosmetic_eyes(self, eye_l, eye_r):
+    #     # Initialise cosmetic joints
+    #     cos_joints = Float32MultiArray()
+    #     # FIXME: Get current value for other cosmetic joints
+    #     # droop, wag, eyel, eyer, earl, earr
+    #     cos_joints.data = [0, 0.5, eye_l, eye_r, 0.3, 0.3]
+    #
+    #     self.pub_cos.publish(cos_joints)
 
-        self.pub_cos.publish(cos_joints)
+    # Publish kinematic joint positions
+    def pub_kinematic(self, tilt, lift, yaw, pitch):
+        kinematic_joints = JointState()
+        kinematic_joints.name = ["tilt", "lift", "yaw", "pitch"]
+        kinematic_joints.position = [tilt, lift, yaw, pitch]
+
+        self.pub_kin.publish(kinematic_joints)
 
     # Publish wheel speeds (m/s)
     def pub_velocity(self, whl_l, whl_r):
@@ -178,8 +188,8 @@ class MiroClient:
         (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([whl_l, whl_r])
 
         # Construct ROS message
-        vel = TwistStamped()
-        vel.twist.linear.x = dr
-        vel.twist.angular.z = dtheta
+        velocity = TwistStamped()
+        velocity.twist.linear.x = dr
+        velocity.twist.angular.z = dtheta
 
-        self.pub_cmd_vel.publish(vel)
+        self.pub_cmd_vel.publish(velocity)
