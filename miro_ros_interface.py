@@ -11,13 +11,13 @@ from PIL import ImageOps
 
 # Other imports
 import os
-import math
 import numpy as np
 import miro2 as miro
 import rospy
 
 # Set publisher queue size
 QUEUE_SIZE = 10
+
 
 class MiroClient:
     def __init__(self):
@@ -29,7 +29,7 @@ class MiroClient:
         topic_root = "/" + os.getenv("MIRO_ROBOT_NAME")
 
         # Initialise ROS node
-        rospy.init_node("MiRo_ROS_interface", anonymous=True)
+        rospy.init_node("MiRo_ROS_python", anonymous=True)
 
         # SUBSCRIBERS
         # TODO: Detect face
@@ -57,6 +57,7 @@ class MiroClient:
         else:
             rospy.Subscriber(topic_root + '/sensors/caml/compressed', CompressedImage, self.callback_caml)
             rospy.Subscriber(topic_root + '/sensors/camr/compressed', CompressedImage, self.callback_camr)
+        rospy.Subscriber(topic_root + '/sensors/kinematic_joints', JointState, self.callback_kinematic_joints)
 
         # Default data
         self.core_affect = None
@@ -74,6 +75,7 @@ class MiroClient:
         self.selection_inhibition = None
         self.sensors_caml = None
         self.sensors_camr = None
+        self.sensors_kinematic_joints = {}
 
         # PUBLISHERS
         self.pub_cmd_vel = rospy.Publisher(topic_root + '/control/cmd_vel', TwistStamped, queue_size=QUEUE_SIZE)
@@ -81,6 +83,7 @@ class MiroClient:
         self.pub_kin = rospy.Publisher(topic_root + '/control/kinematic_joints', JointState, queue_size=QUEUE_SIZE)
 
     # SUBSCRIBER callbacks
+    # Core
     def callback_core_state(self, data):
         # FIXME: Time of day seems to be integrated into state now
         self.core_affect = data
@@ -118,13 +121,6 @@ class MiroClient:
     # def callback_core_time(self, data):
     # 	self.core_time = data
 
-    # TODO: Image stitching before passing images back to dashboard
-    def callback_caml(self, frame):
-        self.sensors_caml = self.process_frame(frame)
-
-    def callback_camr(self, frame):
-        self.sensors_camr = self.process_frame(frame)
-
     def callback_pril(self, frame):
         self.core_pril = self.process_pri(frame)
 
@@ -133,6 +129,18 @@ class MiroClient:
 
     def callback_priw(self, frame):
         self.core_priw = self.process_priw(frame)
+
+    # Sensors
+    # TODO: Image stitching before passing images back to dashboard
+    def callback_caml(self, frame):
+        self.sensors_caml = self.process_frame(frame)
+
+    def callback_camr(self, frame):
+        self.sensors_camr = self.process_frame(frame)
+
+    def callback_kinematic_joints(self, data):
+        for n in range(len(data.name)):
+            self.sensors_kinematic_joints[data.name[n]] = data.position[n]
 
     @staticmethod
     def process_frame(frame):
@@ -176,10 +184,12 @@ class MiroClient:
 
     # Publish kinematic joint positions
     def pub_kinematic(self, tilt, lift, yaw, pitch):
+        # Construct ROS message
         kinematic_joints = JointState()
-        kinematic_joints.name = ["tilt", "lift", "yaw", "pitch"]
+        kinematic_joints.name = ['tilt', 'lift', 'yaw', 'pitch']
         kinematic_joints.position = [tilt, lift, yaw, pitch]
 
+        # Publish
         self.pub_kin.publish(kinematic_joints)
 
     # Publish wheel speeds (m/s)
@@ -192,4 +202,5 @@ class MiroClient:
         velocity.twist.linear.x = dr
         velocity.twist.angular.z = dtheta
 
+        # Publish
         self.pub_cmd_vel.publish(velocity)
