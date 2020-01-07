@@ -3,6 +3,7 @@ from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, 
     Int16MultiArray, String
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import JointState, BatteryState, Image, Imu, Range, CompressedImage
+from miro2_msg import m
 
 # Image handling
 import cv2
@@ -76,6 +77,10 @@ class MiroClient:
         self.sensors_caml = None
         self.sensors_camr = None
         self.sensors_kinematic_joints = {}
+
+        self.kinematic_joints = JointState()
+        self.kinematic_joints.name = ['tilt', 'lift', 'yaw', 'pitch']
+        self.velocity = TwistStamped()
 
         # PUBLISHERS
         self.pub_cmd_vel = rospy.Publisher(topic_root + '/control/cmd_vel', TwistStamped, queue_size=QUEUE_SIZE)
@@ -185,12 +190,12 @@ class MiroClient:
     # Publish kinematic joint positions
     def pub_kinematic(self, tilt, lift, yaw, pitch):
         # Construct ROS message
-        kinematic_joints = JointState()
-        kinematic_joints.name = ['tilt', 'lift', 'yaw', 'pitch']
-        kinematic_joints.position = [tilt, lift, yaw, pitch]
+        # kinematic_joints = JointState()
+        # self.kinematic_joints.name = ['tilt', 'lift', 'yaw', 'pitch']
+        self.kinematic_joints.position = [tilt, lift, yaw, pitch]
 
         # Publish
-        self.pub_kin.publish(kinematic_joints)
+        self.pub_kin.publish(self.kinematic_joints)
 
     # Publish wheel speeds (m/s)
     def pub_velocity(self, whl_l, whl_r):
@@ -198,9 +203,9 @@ class MiroClient:
         (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([whl_l, whl_r])
 
         # Construct ROS message
-        velocity = TwistStamped()
-        velocity.twist.linear.x = dr
-        velocity.twist.angular.z = dtheta
+        # velocity = TwistStamped()
+        self.velocity.twist.linear.x = dr
+        self.velocity.twist.angular.z = dtheta
 
         # Publish
-        self.pub_cmd_vel.publish(velocity)
+        self.pub_cmd_vel.publish(self.velocity)
