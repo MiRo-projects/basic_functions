@@ -82,10 +82,10 @@ class MiroClient:
         self.illum = rospy.Publisher(topic_root + '/control/illum', UInt32MultiArray, queue_size=QUEUE_SIZE)
 
         # Initialise messages
-        self.illum_msg = UInt32MultiArray()
+        self.cmd_vel_msg = TwistStamped()
         self.kinematic_joints_msg = JointState()
         self.kinematic_joints_msg.name = ['tilt', 'lift', 'yaw', 'pitch']
-        self.velocity_msg = TwistStamped()
+        self.illum_msg = UInt32MultiArray()
 
     # SUBSCRIBER callbacks
     # Core
@@ -187,17 +187,6 @@ class MiroClient:
     #
     #     self.pub_cos.publish(cos_joints)
 
-<<<<<<< Updated upstream
-    # Publish kinematic joint positions
-    def pub_kinematic(self, tilt, lift, yaw, pitch):
-        # Construct ROS message
-        kinematic_joints = JointState()
-        kinematic_joints.name = ['tilt', 'lift', 'yaw', 'pitch']
-        kinematic_joints.position = [tilt, lift, yaw, pitch]
-
-        # Publish
-        self.pub_kin.publish(kinematic_joints)
-=======
     # Publish illumination
     # TODO: May be more convenient to pass this as a single list?
     def pub_illum(self, left_front, left_mid, left_rear, right_front, right_mid, right_rear):
@@ -210,24 +199,19 @@ class MiroClient:
         # Internal DOF configuration (Rad) in the order [TILT, LIFT, YAW, PITCH]
         self.kinematic_joints_msg.position = [tilt, lift, yaw, pitch]
         self.kinematic_joints.publish(self.kinematic_joints_msg)
->>>>>>> Stashed changes
 
     # Publish wheel speeds (m/s)
-    def pub_cmd_vel(self, whl_l, whl_r):
-        # Convert wheel speed to command velocity (m/sec, Rad/sec)
+    def pub_cmd_vel_ms(self, whl_l, whl_r):
+        # Convert wheel speed to command velocity
         (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([whl_l, whl_r])
 
-<<<<<<< Updated upstream
-        # Construct ROS message
-        velocity = TwistStamped()
-        velocity.twist.linear.x = dr
-        velocity.twist.angular.z = dtheta
-
-        # Publish
-        self.pub_cmd_vel.publish(velocity)
-=======
         # Construct and publish ROS message
-        self.velocity_msg.twist.linear.x = dr
-        self.velocity_msg.twist.angular.z = dtheta
-        self.cmd_vel.publish(self.velocity_msg)
->>>>>>> Stashed changes
+        self.cmd_vel_msg.twist.linear.x = dr
+        self.cmd_vel_msg.twist.angular.z = dtheta
+        self.cmd_vel.publish(self.cmd_vel_msg)
+
+    # Publish wheel speeds (radians)
+    def pub_cmd_vel_rad(self, dr, dtheta):
+        self.cmd_vel_msg.twist.linear.x = dr
+        self.cmd_vel_msg.twist.angular.z = dtheta
+        self.cmd_vel.publish(self.cmd_vel_msg)
