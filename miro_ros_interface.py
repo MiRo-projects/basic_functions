@@ -1,6 +1,5 @@
 # MiRo-E ROS interfaces
-from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, UInt8MultiArray, UInt16, UInt32, \
-    Int16MultiArray, String
+from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, UInt8MultiArray, UInt16, UInt32, Int16MultiArray, String
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import JointState, BatteryState, Image, Imu, Range, CompressedImage
 
@@ -46,8 +45,7 @@ class MiroClient:
         # rospy.Subscriber(topic_root + '/core/detect_face_l', Float32MultiArray, self.callback_detect_face_l)
         # rospy.Subscriber(topic_root + '/core/detect_face_r', Float32MultiArray, self.callback_detect_face_r)
         rospy.Subscriber(topic_root + '/core/selection/priority', Float32MultiArray, self.callback_selection_priority)
-        rospy.Subscriber(topic_root + '/core/selection/inhibition', Float32MultiArray,
-                         self.callback_selection_inhibition)
+        rospy.Subscriber(topic_root + '/core/selection/inhibition', Float32MultiArray, self.callback_selection_inhibition)
 
         # Sensors
         if self.opt['Uncompressed']:
@@ -78,9 +76,16 @@ class MiroClient:
         self.sensors_kinematic_joints = {}
 
         # PUBLISHERS
-        self.pub_cmd_vel = rospy.Publisher(topic_root + '/control/cmd_vel', TwistStamped, queue_size=QUEUE_SIZE)
-        self.pub_cos = rospy.Publisher(topic_root + '/control/cosmetic_joints', Float32MultiArray, queue_size=QUEUE_SIZE)
-        self.pub_kin = rospy.Publisher(topic_root + '/control/kinematic_joints', JointState, queue_size=QUEUE_SIZE)
+        self.cmd_vel = rospy.Publisher(topic_root + '/control/cmd_vel', TwistStamped, queue_size=QUEUE_SIZE)
+        self.cosmetic_joints = rospy.Publisher(topic_root + '/control/cosmetic_joints', Float32MultiArray, queue_size=QUEUE_SIZE)
+        self.kinematic_joints = rospy.Publisher(topic_root + '/control/kinematic_joints', JointState, queue_size=QUEUE_SIZE)
+        self.illum = rospy.Publisher(topic_root + '/control/illum', UInt32MultiArray, queue_size=QUEUE_SIZE)
+
+        # Initialise messages
+        self.illum_msg = UInt32MultiArray()
+        self.kinematic_joints_msg = JointState()
+        self.kinematic_joints_msg.name = ['tilt', 'lift', 'yaw', 'pitch']
+        self.velocity_msg = TwistStamped()
 
     # SUBSCRIBER callbacks
     # Core
@@ -182,6 +187,7 @@ class MiroClient:
     #
     #     self.pub_cos.publish(cos_joints)
 
+<<<<<<< Updated upstream
     # Publish kinematic joint positions
     def pub_kinematic(self, tilt, lift, yaw, pitch):
         # Construct ROS message
@@ -191,12 +197,27 @@ class MiroClient:
 
         # Publish
         self.pub_kin.publish(kinematic_joints)
+=======
+    # Publish illumination
+    # TODO: May be more convenient to pass this as a single list?
+    def pub_illum(self, left_front, left_mid, left_rear, right_front, right_mid, right_rear):
+        # Each element is an ARGB word where the alpha channel scales the other three
+        self.illum_msg.data = [left_front, left_mid, left_rear, right_front, right_mid, right_rear]
+        self.illum.publish(self.illum_msg)
+
+    # Publish kinematic joint positions
+    def pub_kinematic_joints(self, tilt, lift, yaw, pitch):
+        # Internal DOF configuration (Rad) in the order [TILT, LIFT, YAW, PITCH]
+        self.kinematic_joints_msg.position = [tilt, lift, yaw, pitch]
+        self.kinematic_joints.publish(self.kinematic_joints_msg)
+>>>>>>> Stashed changes
 
     # Publish wheel speeds (m/s)
-    def pub_velocity(self, whl_l, whl_r):
+    def pub_cmd_vel(self, whl_l, whl_r):
         # Convert wheel speed to command velocity (m/sec, Rad/sec)
         (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([whl_l, whl_r])
 
+<<<<<<< Updated upstream
         # Construct ROS message
         velocity = TwistStamped()
         velocity.twist.linear.x = dr
@@ -204,3 +225,9 @@ class MiroClient:
 
         # Publish
         self.pub_cmd_vel.publish(velocity)
+=======
+        # Construct and publish ROS message
+        self.velocity_msg.twist.linear.x = dr
+        self.velocity_msg.twist.angular.z = dtheta
+        self.cmd_vel.publish(self.velocity_msg)
+>>>>>>> Stashed changes
