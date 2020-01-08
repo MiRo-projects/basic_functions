@@ -202,13 +202,9 @@ class MiroClient:
 
     # Publish wheel speeds (m/s)
     def pub_cmd_vel_ms(self, whl_l, whl_r):
-        # Convert wheel speed to command velocity
+        # Convert wheel speed to command velocity and publish
         (dr, dtheta) = miro.utils.wheel_speed2cmd_vel([whl_l, whl_r])
-
-        # Construct and publish ROS message
-        self.cmd_vel_msg.twist.linear.x = dr
-        self.cmd_vel_msg.twist.angular.z = dtheta
-        self.cmd_vel.publish(self.cmd_vel_msg)
+        self.pub_cmd_vel_rad(dr, dtheta)
 
     # Publish wheel speeds (radians)
     def pub_cmd_vel_rad(self, dr, dtheta):
