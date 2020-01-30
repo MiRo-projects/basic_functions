@@ -18,6 +18,7 @@ import rospy
 QUEUE_SIZE = 10
 
 
+# TODO: Split into clients for each data type (e.g. video, sensors)
 class MiroClient:
     def __init__(self):
 
@@ -28,7 +29,8 @@ class MiroClient:
         topic_root = "/" + os.getenv("MIRO_ROBOT_NAME")
 
         # Initialise ROS node
-        rospy.init_node("MiRo_ROS_python", anonymous=True)
+        # 'disable_rostime' must be True to work in Pycharm
+        rospy.init_node("MiRo_ROS_python", anonymous=True, disable_rostime=True)
 
         # SUBSCRIBERS
         # TODO: Detect face
@@ -46,6 +48,8 @@ class MiroClient:
         # rospy.Subscriber(topic_root + '/core/detect_face_r', Float32MultiArray, self.callback_detect_face_r)
         rospy.Subscriber(topic_root + '/core/selection/priority', Float32MultiArray, self.callback_selection_priority)
         rospy.Subscriber(topic_root + '/core/selection/inhibition', Float32MultiArray, self.callback_selection_inhibition)
+        # NEW: Motivation
+        rospy.Subscriber(topic_root + '/motivation', Float32MultiArray, self.callback_motivation)
 
         # Sensors
         if self.opt['Uncompressed']:
@@ -69,6 +73,7 @@ class MiroClient:
         # self.core_detect_face_l = None
         # self.core_detect_face_r = None
         self.core_time = None
+        self.core_motivation = None
         self.selection_priority = None
         self.selection_inhibition = None
         self.sensors_caml = None
@@ -146,6 +151,9 @@ class MiroClient:
     def callback_kinematic_joints(self, data):
         for n in range(len(data.name)):
             self.sensors_kinematic_joints[data.name[n]] = data.position[n]
+
+    def callback_motivation(self, data):
+        self.core_motivation = data
 
     @staticmethod
     def process_frame(frame):
