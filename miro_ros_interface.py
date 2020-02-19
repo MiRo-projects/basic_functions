@@ -11,12 +11,11 @@ from PIL import ImageOps
 
 # Other imports
 import os
+import rospy
+import base64
 import numpy as np
 import miro2 as miro
-import rospy
-
-# Set publisher queue size
-QUEUE_SIZE = 10
+from io import BytesIO
 
 
 class MiRo:
@@ -27,6 +26,9 @@ class MiRo:
 
 		# Set topic root
 		self.tr = '/' + os.getenv('MIRO_ROBOT_NAME') + '/'
+
+		# Set publisher queue size
+		self.qs = 10
 
 
 class MiRoCore(MiRo):
@@ -107,12 +109,19 @@ class MiRoPerception(MiRo):
 		self.prir = None
 		self.priw = None
 
+		self.caml_b64 = None
+		self.camr_b64 = None
+
+		self.time = None
+
 	# TODO: Image stitching before passing images back to dashboard
 	def callback_caml(self, frame):
 		self.caml = self.process_frame(frame)
+		# self.caml_b64 = self.frame_b64(self.caml)
 
 	def callback_camr(self, frame):
 		self.camr = self.process_frame(frame)
+		# self.camr_b64 = self.frame_b64(self.camr)
 
 	def callback_pril(self, frame):
 		self.pril = self.process_pri(frame)
@@ -137,6 +146,17 @@ class MiRoPerception(MiRo):
 		# TODO: Can we convert directly from source in one go?
 		# return Im.frombytes('RGB', (320, 176), np.fromstring(frame.data, np.uint8), 'raw')
 		# return Im.frombytes('RGB', (182, 100), np.fromstring(frame.data, np.uint8), 'jpeg')
+
+	# # TODO: Decide whether to keep this function here or move it to Dashboard app
+	# @staticmethod
+	# def frame_b64(frame):
+	# 	# Create base64 URI from image: https://stackoverflow.com/questions/16065694/is-it-possible-to-create-encoded-base64-url-from-image-object
+	# 	frame_buffer = BytesIO()
+	# 	frame_sml = frame.resize((320, 180))
+	# 	frame_sml.save(frame_buffer, format='PNG')
+	# 	frame_b64 = base64.b64encode(frame_buffer.getvalue())
+	#
+	# 	return 'data:image/png;base64,{}'.format(frame_b64)
 
 	@staticmethod
 	def process_pri(frame):
