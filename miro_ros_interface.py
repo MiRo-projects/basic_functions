@@ -187,6 +187,8 @@ class MiRoSensors(MiRo):
 		self.cliff = None
 		self.sonar = None
 
+		rospy.sleep(0.5)
+
 	def callback_sensors(self, sensors):
 		self.sensors = sensors
 
@@ -242,7 +244,7 @@ class MiRoPublishers(MiRo):
 		self.tone_msg = UInt16MultiArray()
 
 		# Sleep so subscribers can connect
-		rospy.sleep(1)
+		rospy.sleep(0.5)
 
 	# Publish wheel speeds (m/s)
 	def pub_cmd_vel_ms(self, left=0, right=0):
@@ -256,7 +258,7 @@ class MiRoPublishers(MiRo):
 		self.cmd_vel.publish(self.cmd_vel_msg)
 
 	# Publish cosmetic joints
-	# TODO: Add 'all' kwarg to define all joints in single array
+	# TODO: Add 'all' kwarg to define all / multiple joints in single array
 	def pub_cosmetic_joints(
 			self,
 			droop=0.5,
@@ -270,9 +272,9 @@ class MiRoPublishers(MiRo):
 		# Six joints are commanded in the order [DROOP, WAG, L EYE, R EYE, L EAR, R EAR]
 		# Joint positions:
 		# Droop: ?=up       ?=down
-		# Wag:   0=left      1=right
-		# Eyes:  0=open      1=closed
-		# Ears:  0=inwards   1=outwards
+		# Wag:   0=left     1=right
+		# Eyes:  0=open     1=closed
+		# Ears:  0=inwards  1=outwards
 		self.cosmetic_joints_msg.data = [droop, wag, eye_left, eye_right, ear_left, ear_right]
 		self.cosmetic_joints.publish(self.cosmetic_joints_msg)
 
