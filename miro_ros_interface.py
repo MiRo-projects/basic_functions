@@ -12,22 +12,22 @@ from PIL import ImageOps
 # Other imports
 import os
 import rospy
-import base64
+# import base64
 import numpy as np
 import miro2 as miro
-from io import BytesIO
+# from io import BytesIO
 
 
 class MiRo:
 	def __init__(self):
 		# Initialise ROS node
-		# 'disable_rostime=True' needed to work in Pycharm
+		# 'disable_rostime=True' needed to work in PyCharm
 		rospy.init_node("MiRo_ROS_interface", anonymous=True, disable_rostime=True)
 
-		# Set topic root
+		# Topic root
 		self.tr = '/' + os.getenv('MIRO_ROBOT_NAME') + '/'
 
-		# Set publisher queue size
+		# Publisher queue size
 		self.qs = 10
 
 
@@ -171,20 +171,55 @@ class MiRoPerception(MiRo):
 		return Im.frombytes('L', (256, 1), np.fromstring(frame.data, np.uint8), 'raw')
 
 
+# Synchronous 50Hz sensor package
 class MiRoSensors(MiRo):
 	def __init__(self):
 		# TODO: Use super()
 		MiRo.__init__(self)
 
 		# Topic subscriptions
-		rospy.Subscriber(self.tr + 'sensors', msg.sensors_package, self.callback_sensors)
+		rospy.Subscriber(self.tr + 'sensors/package', msg.sensors_package, self.callback_sensors)
 
-		# Default data
-		# TODO: Split here into separate sensors
+		# Initialise data
 		self.sensors = None
+		self.kinematic_joints = None
+		self.light = None
+		self.cliff = None
+		self.sonar = None
 
-	def callback_sensors(self, data):
-		self.sensors = data
+	def callback_sensors(self, sensors):
+		self.sensors = sensors
+
+		# Internal degrees-of-freedom configuration (radians)
+		# In the order [TILT, LIFT, YAW, PITCH]
+		self.kinematic_joints = {
+			'tilt' : sensors.kinematic_joints.position[0],
+			'lift' : sensors.kinematic_joints.position[1],
+			'yaw'  : sensors.kinematic_joints.position[2],
+			'pitch': sensors.kinematic_joints.position[3]
+		}
+
+		# Normalised light level at each of the four light sensors
+		# 0 = dark, 1 = lit
+		# In the order [FRONT LEFT, FRONT RIGHT, REAR LEFT, REAR RIGHT]
+		self.light = {
+			'front_left' : sensors.light[0],
+			'front_right': sensors.light[1],
+			'rear_left'  : sensors.light[2],
+			'rear_right' : sensors.light[3],
+		}
+
+		# Normalised reading from each of the two cliff sensors
+		# 0 = no surface, 1 = surface
+		# In the order [LEFT, RIGHT].
+		self.cliff = {
+			'left' : sensors.cliff.data[0],
+			'right': sensors.cliff.data[1],
+		}
+
+		# Range to strongest sonar reflector (metres)
+		# Normal values are in the interval [0.03, 1.0]
+		self.sonar = sensors.sonar.range
 
 
 class MiRoPublishers(MiRo):
@@ -194,43 +229,21 @@ class MiRoPublishers(MiRo):
 
 		# Topics
 		self.cmd_vel = rospy.Publisher(self.tr + 'control/cmd_vel', TwistStamped, queue_size=self.qs)
-		self.cosmetic_joints = rospy.Publisher(self.tr + '/control/cosmetic_joints', Float32MultiArray, queue_size=self.qs)
-		self.kinematic_joints = rospy.Publisher(self.tr + '/control/kinematic_joints', JointState, queue_size=self.qs)
-		self.illum = rospy.Publisher(self.tr + '/control/illum', UInt32MultiArray, queue_size=self.qs)
+		self.kinematic_joints = rospy.Publisher(self.tr + 'control/kinematic_joints', JointState, queue_size=self.qs)
+		self.cosmetic_joints = rospy.Publisher(self.tr + 'control/cosmetic_joints', Float32MultiArray, queue_size=self.qs)
+		self.illum = rospy.Publisher(self.tr + 'control/illum', UInt32MultiArray, queue_size=self.qs)
+		self.tone = rospy.Publisher(self.tr + 'control/tone', UInt16MultiArray, queue_size=self.qs)
 
 		# Initialise messages
 		self.cmd_vel_msg = TwistStamped()
 		self.kinematic_joints_msg = JointState()
-		self.kinematic_joints_msg.name = ['tilt', 'lift', 'yaw', 'pitch']
+		self.cosmetic_joints_msg = Float32MultiArray()
 		self.illum_msg = UInt32MultiArray()
-
-	# # Publish eyelid positions (1 = closed, 0 = open)
-	# def pub_cosmetic_eyes(self, eye_l, eye_r):
-	# 	# Initialise cosmetic joints
-	# 	cos_joints = Float32MultiArray()
-	# 	# FIXME: Get current value for other cosmetic joints
-	# 	# droop, wag, eyel, eyer, earl, earr
-	# 	cos_joints.data = [0, 0.5, eye_l, eye_r, 0.3, 0.3]
-	#
-	# 	self.pub_cos.publish(cos_joints)
-
-    # Publish illumination
-    # TODO: May be more convenient to pass this as a single list?
-	def pub_illum(self, left_front, left_mid, left_rear, right_front, right_mid, right_rear):
-		# Each element is an ARGB word where the alpha channel scales the other three
-		self.illum_msg.data = [left_front, left_mid, left_rear, right_front, right_mid, right_rear]
-		self.illum.publish(self.illum_msg)
-
-	# Publish kinematic joint positions
-	def pub_kinematic_joints(self, tilt, lift, yaw, pitch):
-		# Internal DOF configuration (Rad) in the order [TILT, LIFT, YAW, PITCH]
-		self.kinematic_joints_msg.position = [tilt, lift, yaw, pitch]
-		self.kinematic_joints.publish(self.kinematic_joints_msg)
+		self.tone_msg = UInt16MultiArray()
 
 	# Publish wheel speeds (m/s)
-	def pub_cmd_vel_ms(self, whl_l, whl_r):
-		# Convert wheel speed to command velocity and publish
-		(dr, dtheta) = miro.utils.wheel_speed2cmd_vel([whl_l, whl_r])
+	def pub_cmd_vel_ms(self, left=0, right=0):
+		(dr, dtheta) = miro.utils.wheel_speed2cmd_vel([left, right])
 		self.pub_cmd_vel_rad(dr, dtheta)
 
 	# Publish wheel speeds (radians)
@@ -238,3 +251,69 @@ class MiRoPublishers(MiRo):
 		self.cmd_vel_msg.twist.linear.x = dr
 		self.cmd_vel_msg.twist.angular.z = dtheta
 		self.cmd_vel.publish(self.cmd_vel_msg)
+
+	# Publish cosmetic joints
+	# TODO: Add 'all' kwarg to define all joints in single array
+	def pub_cosmetic_joints(
+			self,
+			droop=0.5,
+			wag=0.5,
+			eye_left=0,
+			eye_right=0,
+			ear_left=0,
+			ear_right=0
+	):
+		# Normalised configuration of cosmetic joints
+		# Six joints are commanded in the order [DROOP, WAG, L EYE, R EYE, L EAR, R EAR]
+		# Joint positions:
+		# Droop: ?=up       ?=down
+		# Wag:   0=left      1=right
+		# Eyes:  0=open      1=closed
+		# Ears:  0=inwards   1=outwards
+		self.cosmetic_joints_msg.data = [droop, wag, eye_left, eye_right, ear_left, ear_right]
+		self.cosmetic_joints.publish(self.cosmetic_joints_msg)
+
+	# Publish kinematic joint positions
+	# TODO: Convert these into more easily understandable values
+	def pub_kinematic_joints(
+			self,
+			tilt=0,
+			lift=0,
+			yaw=0,
+			pitch=0
+	):
+		# Internal DOF configuration (radians) in the order [TILT, LIFT, YAW, PITCH]
+		self.kinematic_joints_msg.position = [tilt, lift, yaw, pitch]
+		self.kinematic_joints.publish(self.kinematic_joints_msg)
+
+	# Publish illumination
+	# TODO: Add 'all' kwarg to define all lights in single array
+	# TODO: Allow publication of simple 'red', 'blue' etc colours
+	def pub_illum(
+			self,
+			left_front=0x00000000,
+			left_mid=0x00000000,
+			left_rear=0x00000000,
+			right_front=0x00000000,
+			right_mid=0x00000000,
+			right_rear=0x00000000
+	):
+		# Commanded pattern for the six LEDs in the order [L FRONT, L MIDDLE, L REAR, R FRONT, R MIDDLE, R REAR]
+		# Each element is an ARGB word (0xAARRGGBB) where A is a brightness channel that scales the other three
+		self.illum_msg.data = [left_front, left_mid, left_rear, right_front, right_mid, right_rear]
+		self.illum.publish(self.illum_msg)
+
+	# Publish audio tone
+	def pub_tone(
+			self,
+			frequency=0,
+			volume=0,
+			duration=0
+	):
+		# Frequency in hertz (values between 50 and 2000)
+		# Volume from 0 to 255
+		# Duration in platform ticks (20ms periods)
+		self.tone_msg.data = [frequency, volume, duration]
+		self.tone.publish(self.tone_msg)
+
+
