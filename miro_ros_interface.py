@@ -28,7 +28,7 @@ class MiRo:
 		self.tr = '/' + os.getenv('MIRO_ROBOT_NAME') + '/'
 
 		# Publisher queue size
-		self.qs = 10
+		self.qs = 2
 
 
 class MiRoCore(MiRo):
@@ -203,10 +203,10 @@ class MiRoSensors(MiRo):
 		# 0 = dark, 1 = lit
 		# In the order [FRONT LEFT, FRONT RIGHT, REAR LEFT, REAR RIGHT]
 		self.light = {
-			'front_left' : sensors.light[0],
-			'front_right': sensors.light[1],
-			'rear_left'  : sensors.light[2],
-			'rear_right' : sensors.light[3],
+			'front_left' : sensors.light.data[0],
+			'front_right': sensors.light.data[1],
+			'rear_left'  : sensors.light.data[2],
+			'rear_right' : sensors.light.data[3],
 		}
 
 		# Normalised reading from each of the two cliff sensors
@@ -240,6 +240,9 @@ class MiRoPublishers(MiRo):
 		self.cosmetic_joints_msg = Float32MultiArray()
 		self.illum_msg = UInt32MultiArray()
 		self.tone_msg = UInt16MultiArray()
+
+		# Sleep so subscribers can connect
+		rospy.sleep(1)
 
 	# Publish wheel speeds (m/s)
 	def pub_cmd_vel_ms(self, left=0, right=0):
@@ -296,10 +299,31 @@ class MiRoPublishers(MiRo):
 			left_rear=0x00000000,
 			right_front=0x00000000,
 			right_mid=0x00000000,
-			right_rear=0x00000000
+			right_rear=0x00000000,
+			**kwargs
 	):
 		# Commanded pattern for the six LEDs in the order [L FRONT, L MIDDLE, L REAR, R FRONT, R MIDDLE, R REAR]
 		# Each element is an ARGB word (0xAARRGGBB) where A is a brightness channel that scales the other three
+
+		# Set multiple lights based on keyword arguments
+		if kwargs.get('front'):
+			left_front = right_front = kwargs['front']
+
+		if kwargs.get('mid'):
+			left_mid = right_mid = kwargs['mid']
+
+		if kwargs.get('rear'):
+			left_rear = right_rear = kwargs['rear']
+
+		if kwargs.get('left_all'):
+			left_front = left_mid = left_rear = kwargs['left_all']
+
+		if kwargs.get('right_all'):
+			right_front = right_mid = right_rear = kwargs['right_all']
+
+		if kwargs.get('all'):
+			left_front = left_mid = left_rear = right_front = right_mid = right_rear = kwargs['all']
+
 		self.illum_msg.data = [left_front, left_mid, left_rear, right_front, right_mid, right_rear]
 		self.illum.publish(self.illum_msg)
 
@@ -315,5 +339,3 @@ class MiRoPublishers(MiRo):
 		# Duration in platform ticks (20ms periods)
 		self.tone_msg.data = [frequency, volume, duration]
 		self.tone.publish(self.tone_msg)
-
-
