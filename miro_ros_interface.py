@@ -4,6 +4,9 @@ from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import JointState, BatteryState, Image, Imu, Range, CompressedImage
 from miro2_msg import msg
 
+# MiRo-E parameters
+import constants as con
+
 # Image handling
 import cv2
 from PIL import Image as Im
@@ -12,29 +15,28 @@ from PIL import ImageOps
 # Other imports
 import os
 import rospy
-# import base64
 import numpy as np
 import miro2 as miro
-# from io import BytesIO
 
 
 class MiRo:
-	def __init__(self):
-		# Initialise ROS node
-		# 'disable_rostime=True' needed to work in PyCharm
-		rospy.init_node("MiRo_ROS_interface", anonymous=True, disable_rostime=True)
+	def __init__(self, name):
+		# Check node name validity and prefix with underscore
+		if name:
+			name = '_' + filter(str.isalnum, str(name))
 
-		# Topic root
-		self.tr = '/' + os.getenv('MIRO_ROBOT_NAME') + '/'
+		# Initialise ROS node ('disable_rostime=True' needed to work in PyCharm)
+		rospy.init_node('MRI' + name, anonymous=True, disable_rostime="PYCHARM_HOSTED" in os.environ)
 
-		# Publisher queue size
-		self.qs = 2
+		self.tr = '/' + os.getenv('MIRO_ROBOT_NAME') + '/'  # ROS topic root
+		self.qs = 2                                         # Publisher queue size
+		self.sleep = 0.5                                    # Initialisation sleep duration
 
 
 class MiRoCore(MiRo):
-	def __init__(self):
-		# TODO: Use super()
-		MiRo.__init__(self)
+	def __init__(self, name=''):
+		# TODO: Use super() when moving to Python 3
+		MiRo.__init__(self, name)
 
 		# Topic subscriptions
 		rospy.Subscriber(self.tr + 'core/animal/state', miro.msg.animal_state, self.callback_core_state)
@@ -62,6 +64,9 @@ class MiRoCore(MiRo):
 		self.selection_inhibition = None
 		self.time = None
 
+		# Sleep for ROS initialisation
+		rospy.sleep(self.sleep)
+
 	def callback_core_state(self, data):
 		# FIXME: Time of day seems to be integrated into state now
 		self.affect = data
@@ -83,9 +88,10 @@ class MiRoCore(MiRo):
 
 
 class MiRoPerception(MiRo):
-	def __init__(self):
-		# TODO: Use super()
-		MiRo.__init__(self)
+	# Asynchronous sensors
+	def __init__(self, name=''):
+		# TODO: Use super() when moving to Python 3
+		MiRo.__init__(self, name)
 
 		# TODO: Add test for physical or sim. robot
 		self.opt = {'Uncompressed': False}
@@ -98,6 +104,8 @@ class MiRoPerception(MiRo):
 		else:
 			rospy.Subscriber(self.tr + 'sensors/caml/compressed', CompressedImage, self.callback_caml)
 			rospy.Subscriber(self.tr + 'sensors/camr/compressed', CompressedImage, self.callback_camr)
+		rospy.Subscriber(self.tr + 'sensors/mics', Int16MultiArray, self.callback_mics)
+		# Saliency maps will only be available when MiRo is running in demo mode
 		rospy.Subscriber(self.tr + 'core/pril', Image, self.callback_pril)
 		rospy.Subscriber(self.tr + 'core/prir', Image, self.callback_prir)
 		rospy.Subscriber(self.tr + 'core/priw', Image, self.callback_priw)
@@ -105,21 +113,32 @@ class MiRoPerception(MiRo):
 		# Default data
 		self.caml = None
 		self.camr = None
+		self.mics = None
 		self.pril = None
 		self.prir = None
 		self.priw = None
 
-		self.caml_b64 = None
-		self.camr_b64 = None
+		# Sleep for ROS initialisation
+		rospy.sleep(self.sleep)
 
-		self.time = None
-
-	# TODO: Image stitching before passing images back to dashboard
+	# TODO: Image stitching
 	def callback_caml(self, frame):
 		self.caml = self.process_frame(frame)
 
 	def callback_camr(self, frame):
 		self.camr = self.process_frame(frame)
+
+	def callback_mics(self, msg):
+		# TODO: Is this rescaling necessary? What does it achieve?
+		# data = np.asarray(msg.data, 'float32') * (1.0 / 32768.0)
+		data = np.asarray(msg.data, 'float32')
+		data = data.reshape((con.MICS, con.BLOCK_SAMPLES))
+		self.mics = {
+			'left'  : data[0],
+			'right' : data[1],
+			'centre': data[2],
+			'tail'  : data[3]
+		}
 
 	def callback_pril(self, frame):
 		self.pril = self.process_pri(frame)
@@ -141,27 +160,17 @@ class MiRoPerception(MiRo):
 		# Convert to image format - default output is 640x360
 		return Im.fromarray(frame_rgb)
 
-		# TODO: Can we convert directly from source in one go?
+		# TODO: Can we convert directly from source in a single step?
 		# return Im.frombytes('RGB', (320, 176), np.fromstring(frame.data, np.uint8), 'raw')
 		# return Im.frombytes('RGB', (182, 100), np.fromstring(frame.data, np.uint8), 'jpeg')
 
-	# # TODO: Decide whether to keep this function here or move it to Dashboard app
-	# @staticmethod
-	# def frame_b64(frame):
-	# 	# Create base64 URI from image: https://stackoverflow.com/questions/16065694/is-it-possible-to-create-encoded-base64-url-from-image-object
-	# 	frame_buffer = BytesIO()
-	# 	frame_sml = frame.resize((320, 180))
-	# 	frame_sml.save(frame_buffer, format='PNG')
-	# 	frame_b64 = base64.b64encode(frame_buffer.getvalue())
-	#
-	# 	return 'data:image/png;base64,{}'.format(frame_b64)
-
 	@staticmethod
 	def process_pri(frame):
+		# TODO: Convert to image type with full alpha channel and make background transparent
+		# TODO: Move these constants to constants.py
 		# Get monochrome image
 		pri = Im.frombytes('L', (178, 100), np.fromstring(frame.data, np.uint8), 'raw')
 
-		# TODO: Convert to image type with full alpha channel and make background transparent
 		# Invert image for overlaying
 		return ImageOps.invert(pri)
 
@@ -171,11 +180,11 @@ class MiRoPerception(MiRo):
 		return Im.frombytes('L', (256, 1), np.fromstring(frame.data, np.uint8), 'raw')
 
 
-# Synchronous 50Hz sensor package
 class MiRoSensors(MiRo):
-	def __init__(self):
-		# TODO: Use super()
-		MiRo.__init__(self)
+	# Synchronous 50Hz sensors
+	def __init__(self, name=''):
+		# TODO: Use super() when moving to Python 3
+		MiRo.__init__(self, name)
 
 		# Topic subscriptions
 		rospy.Subscriber(self.tr + 'sensors/package', msg.sensors_package, self.callback_sensors)
@@ -187,7 +196,8 @@ class MiRoSensors(MiRo):
 		self.cliff = None
 		self.sonar = None
 
-		rospy.sleep(0.5)
+		# Sleep for ROS initialisation
+		rospy.sleep(self.sleep)
 
 	def callback_sensors(self, sensors):
 		self.sensors = sensors
@@ -225,9 +235,9 @@ class MiRoSensors(MiRo):
 
 
 class MiRoPublishers(MiRo):
-	def __init__(self):
-		# TODO: Use super()
-		MiRo.__init__(self)
+	def __init__(self, name=''):
+		# TODO: Use super() when moving to Python 3
+		MiRo.__init__(self, name)
 
 		# Topics
 		self.cmd_vel = rospy.Publisher(self.tr + 'control/cmd_vel', TwistStamped, queue_size=self.qs)
@@ -243,8 +253,8 @@ class MiRoPublishers(MiRo):
 		self.illum_msg = UInt32MultiArray()
 		self.tone_msg = UInt16MultiArray()
 
-		# Sleep so subscribers can connect
-		rospy.sleep(0.5)
+		# Sleep for ROS initialisation
+		rospy.sleep(self.sleep)
 
 	# Publish wheel speeds (m/s)
 	def pub_cmd_vel_ms(self, left=0, right=0):
@@ -292,8 +302,6 @@ class MiRoPublishers(MiRo):
 		self.kinematic_joints.publish(self.kinematic_joints_msg)
 
 	# Publish illumination
-	# TODO: Add 'all' kwarg to define all lights in single array
-	# TODO: Allow publication of simple 'red', 'blue' etc colours
 	def pub_illum(
 			self,
 			left_front=0x00000000,
@@ -306,6 +314,24 @@ class MiRoPublishers(MiRo):
 	):
 		# Commanded pattern for the six LEDs in the order [L FRONT, L MIDDLE, L REAR, R FRONT, R MIDDLE, R REAR]
 		# Each element is an ARGB word (0xAARRGGBB) where A is a brightness channel that scales the other three
+
+		# Set basic named colours
+		for key in kwargs:
+			# TODO: Replace with switch/case when moving to Python 3
+			if kwargs[key] == 'red':
+				kwargs[key] = 0xFFFF0000
+			elif kwargs[key] == 'green':
+				kwargs[key] = 0xFF00FF00
+			elif kwargs[key] == 'blue':
+				kwargs[key] = 0xFF0000FF
+			elif kwargs[key] == 'yellow':
+				kwargs[key] = 0xFFFFFF00
+			elif kwargs[key] == 'cyan':
+				kwargs[key] = 0xFF00FFFF
+			elif kwargs[key] == 'magenta':
+				kwargs[key] = 0xFFFF00FF
+			elif kwargs[key] == 'white':
+				kwargs[key] = 0xFFFFFFFF
 
 		# Set multiple lights based on keyword arguments
 		if kwargs.get('front'):
@@ -336,8 +362,20 @@ class MiRoPublishers(MiRo):
 			volume=0,
 			duration=0
 	):
-		# Frequency in hertz (values between 50 and 2000)
+		# Frequency in Hz (values between 50 and 2000)
+		frequency = np.clip(
+			frequency,
+			con.TONE_FREQUENCY['min'],
+			con.TONE_FREQUENCY['max']
+		)
 		# Volume from 0 to 255
+		volume = np.clip(
+			volume,
+			con.TONE_VOLUME['min'],
+			con.TONE_VOLUME['max']
+		)
 		# Duration in platform ticks (20ms periods)
+		duration = np.maximum(0, duration)
+
 		self.tone_msg.data = [frequency, volume, duration]
 		self.tone.publish(self.tone_msg)
