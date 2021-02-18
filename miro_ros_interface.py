@@ -15,18 +15,17 @@ from PIL import ImageOps
 # Other imports
 import os
 import rospy
+import rosnode
 import numpy as np
 import miro2 as miro
 
 
 class MiRo:
-	def __init__(self, name):
-		# Check node name validity and prefix with underscore
-		if name:
-			name = '_' + filter(str.isalnum, str(name))
-
-		# Initialise ROS node ('disable_rostime=True' needed to work in PyCharm)
-		rospy.init_node('MRI' + name, anonymous=True, disable_rostime="PYCHARM_HOSTED" in os.environ)
+	def __init__(self):
+		name = 'MiRo_ROS_interface'
+		if name not in rosnode.get_node_names():
+			# Initialise ROS node ('disable_rostime=True' needed to work in PyCharm)
+			rospy.init_node(name, anonymous=True, disable_rostime="PYCHARM_HOSTED" in os.environ)
 
 		self.tr = '/' + os.getenv('MIRO_ROBOT_NAME') + '/'  # ROS topic root
 		self.qs = 2                                         # Publisher queue size
@@ -34,11 +33,12 @@ class MiRo:
 
 
 class MiRoCore(MiRo):
-	def __init__(self, name=''):
+	def __init__(self):
 		# TODO: Use super() when moving to Python 3
-		MiRo.__init__(self, name)
+		MiRo.__init__(self)
 
 		# Topic subscriptions
+		# State
 		rospy.Subscriber(self.tr + 'core/animal/state', miro.msg.animal_state, self.callback_core_state)
 		# rospy.Subscriber(topic_root + '/core/detect_objects_l', miro.msg.objects, self.callback_detect_objects_l)
 		# rospy.Subscriber(topic_root + '/core/detect_objects_r', miro.msg.objects, self.callback_detect_objects_r)
@@ -46,9 +46,14 @@ class MiRoCore(MiRo):
 		# rospy.Subscriber(topic_root + '/core/detect_ball_r', UInt16MultiArray, self.callback_detect_ball_r)
 		# rospy.Subscriber(topic_root + '/core/detect_face_l', Float32MultiArray, self.callback_detect_face_l)
 		# rospy.Subscriber(topic_root + '/core/detect_face_r', Float32MultiArray, self.callback_detect_face_r)
+		# Salience maps
+		rospy.Subscriber(self.tr + 'core/pril', Image, self.callback_pril)
+		rospy.Subscriber(self.tr + 'core/prir', Image, self.callback_prir)
+		rospy.Subscriber(self.tr + 'core/priw', Image, self.callback_priw)
+		# Selection
 		rospy.Subscriber(self.tr + 'core/selection/priority', Float32MultiArray, self.callback_selection_priority)
 		rospy.Subscriber(self.tr + 'core/selection/inhibition', Float32MultiArray, self.callback_selection_inhibition)
-		# NEW: Motivation
+		# Motivation
 		rospy.Subscriber(self.tr + 'motivation', Float32MultiArray, self.callback_motivation)
 
 		# Default data
@@ -60,6 +65,9 @@ class MiRoCore(MiRo):
 		# self.core_detect_face_l = None
 		# self.core_detect_face_r = None
 		self.motivation = None
+		self.pril = None
+		self.prir = None
+		self.priw = None
 		self.selection_priority = None
 		self.selection_inhibition = None
 		self.time = None
@@ -80,43 +88,59 @@ class MiRoCore(MiRo):
 	def callback_motivation(self, data):
 		self.motivation = data
 
+	def callback_pril(self, frame):
+		self.pril = self.process_pri(frame)
+
+	def callback_prir(self, frame):
+		self.prir = self.process_pri(frame)
+
+	def callback_priw(self, frame):
+		self.priw = self.process_priw(frame)
+
 	def callback_selection_priority(self, data):
 		self.selection_priority = data
 
 	def callback_selection_inhibition(self, data):
 		self.selection_inhibition = data
 
+	@staticmethod
+	def process_pri(frame):
+		# TODO: Convert to image type with full alpha channel and make background transparent
+		# Get monochrome image
+		pri = Im.frombytes('L', (con.PRI['width'], con.PRI['height']), np.fromstring(frame.data, np.uint8), 'raw')
+
+		# Invert image for overlaying
+		return ImageOps.invert(pri)
+
+	@staticmethod
+	def process_priw(frame):
+		# Get monochrome image
+		return Im.frombytes('L', (con.PRIW['width'], con.PRIW['height']), np.fromstring(frame.data, np.uint8), 'raw')
+
 
 class MiRoPerception(MiRo):
 	# Asynchronous sensors
-	def __init__(self, name=''):
+	def __init__(self):
 		# TODO: Use super() when moving to Python 3
-		MiRo.__init__(self, name)
+		MiRo.__init__(self)
 
-		# TODO: Add test for physical or sim. robot
+		# TODO: Add test for physical or simulated robot
 		self.opt = {'Uncompressed': False}
 
 		# Topic subscriptions
 		if self.opt['Uncompressed']:
-			# TODO: Uncompressed callbacks not yet tested
+			# TODO: Uncompressed callbacks are untested
 			rospy.Subscriber(self.tr + 'sensors/caml', Image, self.callback_caml)
 			rospy.Subscriber(self.tr + 'sensors/camr', Image, self.callback_camr)
 		else:
 			rospy.Subscriber(self.tr + 'sensors/caml/compressed', CompressedImage, self.callback_caml)
 			rospy.Subscriber(self.tr + 'sensors/camr/compressed', CompressedImage, self.callback_camr)
 		rospy.Subscriber(self.tr + 'sensors/mics', Int16MultiArray, self.callback_mics)
-		# Saliency maps will only be available when MiRo is running in demo mode
-		rospy.Subscriber(self.tr + 'core/pril', Image, self.callback_pril)
-		rospy.Subscriber(self.tr + 'core/prir', Image, self.callback_prir)
-		rospy.Subscriber(self.tr + 'core/priw', Image, self.callback_priw)
 
 		# Default data
 		self.caml = None
 		self.camr = None
 		self.mics = None
-		self.pril = None
-		self.prir = None
-		self.priw = None
 
 		# Sleep for ROS initialisation
 		rospy.sleep(self.sleep)
@@ -129,9 +153,9 @@ class MiRoPerception(MiRo):
 		self.camr = self.process_frame(frame)
 
 	def callback_mics(self, msg):
-		# TODO: Is this rescaling necessary? What does it achieve?
-		# data = np.asarray(msg.data, 'float32') * (1.0 / 32768.0)
-		data = np.asarray(msg.data, 'float32')
+		# Rescale data to be between -1 and +1
+		data = np.asarray(msg.data, 'float32') * (1.0 / 32768.0)
+		# Separate out samples from each microphone
 		data = data.reshape((con.MICS, con.BLOCK_SAMPLES))
 		self.mics = {
 			'left'  : data[0],
@@ -139,15 +163,6 @@ class MiRoPerception(MiRo):
 			'centre': data[2],
 			'tail'  : data[3]
 		}
-
-	def callback_pril(self, frame):
-		self.pril = self.process_pri(frame)
-
-	def callback_prir(self, frame):
-		self.prir = self.process_pri(frame)
-
-	def callback_priw(self, frame):
-		self.priw = self.process_priw(frame)
 
 	@staticmethod
 	def process_frame(frame):
@@ -157,34 +172,19 @@ class MiRoPerception(MiRo):
 		# Convert image to RGB order
 		frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
 
-		# Convert to image format - default output is 640x360
-		return Im.fromarray(frame_rgb)
-
 		# TODO: Can we convert directly from source in a single step?
 		# return Im.frombytes('RGB', (320, 176), np.fromstring(frame.data, np.uint8), 'raw')
 		# return Im.frombytes('RGB', (182, 100), np.fromstring(frame.data, np.uint8), 'jpeg')
 
-	@staticmethod
-	def process_pri(frame):
-		# TODO: Convert to image type with full alpha channel and make background transparent
-		# TODO: Move these constants to constants.py
-		# Get monochrome image
-		pri = Im.frombytes('L', (178, 100), np.fromstring(frame.data, np.uint8), 'raw')
-
-		# Invert image for overlaying
-		return ImageOps.invert(pri)
-
-	@staticmethod
-	def process_priw(frame):
-		# Get monochrome image
-		return Im.frombytes('L', (256, 1), np.fromstring(frame.data, np.uint8), 'raw')
+		# Convert to image format - default output is 640x360
+		return Im.fromarray(frame_rgb)
 
 
 class MiRoSensors(MiRo):
 	# Synchronous 50Hz sensors
-	def __init__(self, name=''):
+	def __init__(self):
 		# TODO: Use super() when moving to Python 3
-		MiRo.__init__(self, name)
+		MiRo.__init__(self)
 
 		# Topic subscriptions
 		rospy.Subscriber(self.tr + 'sensors/package', msg.sensors_package, self.callback_sensors)
@@ -235,9 +235,9 @@ class MiRoSensors(MiRo):
 
 
 class MiRoPublishers(MiRo):
-	def __init__(self, name=''):
+	def __init__(self):
 		# TODO: Use super() when moving to Python 3
-		MiRo.__init__(self, name)
+		MiRo.__init__(self)
 
 		# Topics
 		self.cmd_vel = rospy.Publisher(self.tr + 'control/cmd_vel', TwistStamped, queue_size=self.qs)
@@ -267,7 +267,7 @@ class MiRoPublishers(MiRo):
 		self.cmd_vel_msg.twist.angular.z = dtheta
 		self.cmd_vel.publish(self.cmd_vel_msg)
 
-	# Publish cosmetic joints
+	# Publish cosmetic joint positions
 	# TODO: Add 'all' kwarg to define all / multiple joints in single array
 	def pub_cosmetic_joints(
 			self,
@@ -358,24 +358,53 @@ class MiRoPublishers(MiRo):
 	# Publish audio tone
 	def pub_tone(
 			self,
-			frequency=0,
-			volume=0,
-			duration=0
+			frequency=None,
+			volume=None,
+			duration=None,
+			**kwargs
 	):
+		# Convert a string note (eg. "A4") to a frequency (eg. 440)
+		# MIT license
+		# From https://gist.github.com/CGrassin/26a1fdf4fc5de788da9b376ff717516e
+		def get_frequency(note, A4=440):
+			notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
+
+			octave = int(note[2]) if len(note) == 3 else int(note[1])
+
+			key_number = notes.index(note[0:-1])
+
+			if key_number < 3:
+				key_number = key_number + 12 + ((octave - 1) * 12) + 1
+			else:
+				key_number = key_number + ((octave - 1) * 12) + 1
+
+			return A4 * 2 ** ((key_number - 49) / 12)
+
+		# A note value in kwargs overrides the given frequency
+		if kwargs.get('note'):
+			try:
+				frequency = get_frequency(kwargs['note'])
+			except IndexError:
+				print('Please specify both note and octave value, eg. C4')
+			except ValueError:
+				print('{} is not a recognised note'.format(kwargs['note']))
+
 		# Frequency in Hz (values between 50 and 2000)
 		frequency = np.clip(
 			frequency,
 			con.TONE_FREQUENCY['min'],
 			con.TONE_FREQUENCY['max']
 		)
+
 		# Volume from 0 to 255
 		volume = np.clip(
 			volume,
 			con.TONE_VOLUME['min'],
 			con.TONE_VOLUME['max']
 		)
-		# Duration in platform ticks (20ms periods)
-		duration = np.maximum(0, duration)
+
+		# Duration in seconds (20ms platform ticks * 50)
+		duration = np.maximum(0, duration * 50)
 
 		self.tone_msg.data = [frequency, volume, duration]
 		self.tone.publish(self.tone_msg)
