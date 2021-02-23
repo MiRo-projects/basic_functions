@@ -1,5 +1,3 @@
-# coding=utf-8
-
 import apriltag
 import cv2
 import math
