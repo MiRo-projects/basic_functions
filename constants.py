@@ -1,3 +1,5 @@
+import numpy as np
+
 # Audio
 # From http://labs.consequentialrobotics.com/miro-e/docs/index.php?page=Technical_Interfaces_ROS
 BLOCK_SAMPLES = 500         # Sample rate of 20kHz and packages arriving at 40Hz == 500 samples per package
@@ -21,3 +23,13 @@ PRIW = {                    # Dimensions of audio salience map output
 	'width' : 256,
 	'height': 1
 }
+
+# Image distortion
+# (It may be possible to derive better values by performing your own calibration!)
+MTX = np.array([
+	[1.04358065e+03, 0, 3.29969935e+02],
+	[0, 1.03845278e+03, 1.68243114e+02],
+	[0, 0, 1]
+])
+DIST = np.array([[-3.63299415e+00, 1.52661324e+01, -7.23780207e-03,- 7.48630198e-04, -3.20700124e+01]])
+FOCAL_LENGTH = 340
