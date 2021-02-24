@@ -139,7 +139,9 @@ class MiRoPerception(MiRo):
 
 		# Default data
 		self.caml = None
+		self.caml_undistorted = None
 		self.camr = None
+		self.camr_undistorted = None
 		self.mics = None
 
 		# Sleep for ROS initialisation
@@ -147,10 +149,16 @@ class MiRoPerception(MiRo):
 
 	# TODO: Image stitching
 	def callback_caml(self, frame):
-		self.caml = self.process_frame(frame)
+		# self.caml = self.process_frame(frame)
+		image = self.process_frame(frame)
+		self.caml = image['normal']
+		self.caml_undistorted = image['undistorted']
 
 	def callback_camr(self, frame):
-		self.camr = self.process_frame(frame)
+		# self.camr = self.process_frame(frame)
+		image = self.process_frame(frame)
+		self.camr = image['normal']
+		self.camr_undistorted = image['undistorted']
 
 	def callback_mics(self, msg):
 		# Rescale data to be between -1 and +1
@@ -164,20 +172,26 @@ class MiRoPerception(MiRo):
 			'tail'  : data[3]
 		}
 
+	# TODO: Should images be returned in CV format rather than PIL?
 	@staticmethod
 	def process_frame(frame):
 		# Decode image from numpy string format
-		frame_bgr = cv2.imdecode(np.fromstring(frame.data, np.uint8), cv2.IMREAD_COLOR)
+		frame_out = cv2.imdecode(np.fromstring(frame.data, np.uint8), cv2.IMREAD_COLOR)
 
-		# Convert image to RGB order
-		frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
+		# # Convert image to RGB order
+		# frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
 
 		# TODO: Can we convert directly from source in a single step?
 		# return Im.frombytes('RGB', (320, 176), np.fromstring(frame.data, np.uint8), 'raw')
 		# return Im.frombytes('RGB', (182, 100), np.fromstring(frame.data, np.uint8), 'jpeg')
 
-		# Convert to image format - default output is 640x360
-		return Im.fromarray(frame_rgb)
+		# Undistort image
+		frame_undistorted = cv2.undistort(frame_out, con.MTX, con.DIST, None)
+
+		# Convert to image format - default output for unmodified frame is 640x360
+		# return Im.fromarray(frame_rgb)
+		# return {'normal': Im.fromarray(frame_rgb), 'undistorted': Im.fromarray(frame_undistorted)}
+		return {'normal': frame_out, 'undistorted': frame_undistorted}
 
 
 class MiRoSensors(MiRo):

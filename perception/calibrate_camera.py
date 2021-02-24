@@ -1,7 +1,7 @@
-# coding=utf-8
-
 import cv2
 import numpy as np
+
+# MiRo-E interface
 import miro_ros_interface as mri
 
 # USAGE: Set MiRo in front of a checkerboard calibration screen
