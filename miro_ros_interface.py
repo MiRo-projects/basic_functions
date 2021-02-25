@@ -1,7 +1,7 @@
 # MiRo-E ROS interfaces
-from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, UInt8MultiArray, UInt16, UInt32, Int16MultiArray, String
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import JointState, BatteryState, Image, Imu, Range, CompressedImage
+from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, UInt8MultiArray, UInt16, UInt32, Int16MultiArray, String
 from miro2_msg import msg
 
 # MiRo-E parameters
@@ -172,13 +172,12 @@ class MiRoPerception(MiRo):
 			'tail'  : data[3]
 		}
 
-	# TODO: Should images be returned in CV format rather than PIL?
 	@staticmethod
 	def process_frame(frame):
 		# Decode image from numpy string format
 		frame_out = cv2.imdecode(np.fromstring(frame.data, np.uint8), cv2.IMREAD_COLOR)
 
-		# # Convert image to RGB order
+		# Convert image to RGB order
 		# frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
 
 		# TODO: Can we convert directly from source in a single step?
@@ -190,7 +189,6 @@ class MiRoPerception(MiRo):
 
 		# Convert to image format - default output for unmodified frame is 640x360
 		# return Im.fromarray(frame_rgb)
-		# return {'normal': Im.fromarray(frame_rgb), 'undistorted': Im.fromarray(frame_undistorted)}
 		return {'normal': frame_out, 'undistorted': frame_undistorted}
 
 
@@ -290,15 +288,24 @@ class MiRoPublishers(MiRo):
 			eye_left=0,
 			eye_right=0,
 			ear_left=0,
-			ear_right=0
+			ear_right=0,
+			**kwargs
 	):
 		# Normalised configuration of cosmetic joints
 		# Six joints are commanded in the order [DROOP, WAG, L EYE, R EYE, L EAR, R EAR]
 		# Joint positions:
-		# Droop: ?=up       ?=down
+		# Droop: 0=up       1=down
 		# Wag:   0=left     1=right
 		# Eyes:  0=open     1=closed
 		# Ears:  0=inwards  1=outwards
+
+		# Set multiple joints at once
+		if kwargs.get('eyes'):
+			eye_left = eye_right = kwargs['eyes']
+
+		if kwargs.get('ears'):
+			ear_left = ear_right = kwargs['ears']
+
 		self.cosmetic_joints_msg.data = [droop, wag, eye_left, eye_right, ear_left, ear_right]
 		self.cosmetic_joints.publish(self.cosmetic_joints_msg)
 
@@ -328,41 +335,27 @@ class MiRoPublishers(MiRo):
 	):
 		# Commanded pattern for the six LEDs in the order [L FRONT, L MIDDLE, L REAR, R FRONT, R MIDDLE, R REAR]
 		# Each element is an ARGB word (0xAARRGGBB) where A is a brightness channel that scales the other three
-
-		# Set basic named colours
 		for key in kwargs:
-			# TODO: Replace with switch/case when moving to Python 3
-			if kwargs[key] == 'red':
-				kwargs[key] = 0xFFFF0000
-			elif kwargs[key] == 'green':
-				kwargs[key] = 0xFF00FF00
-			elif kwargs[key] == 'blue':
-				kwargs[key] = 0xFF0000FF
-			elif kwargs[key] == 'yellow':
-				kwargs[key] = 0xFFFFFF00
-			elif kwargs[key] == 'cyan':
-				kwargs[key] = 0xFF00FFFF
-			elif kwargs[key] == 'magenta':
-				kwargs[key] = 0xFFFF00FF
-			elif kwargs[key] == 'white':
-				kwargs[key] = 0xFFFFFFFF
+			try:
+				kwargs[key] = con.ARGB_WORD[kwargs[key]]
+			# TODO: Add better error checking here (eg. if user tries to pass an RGB tuple)
+			except KeyError:
+				if isinstance(kwargs[key], str):
+					print('Unknown colour name provided')
+				else:
+					pass
 
-		# Set multiple lights based on keyword arguments
+		# Set multiple lights at once
 		if kwargs.get('front'):
 			left_front = right_front = kwargs['front']
-
 		if kwargs.get('mid'):
 			left_mid = right_mid = kwargs['mid']
-
 		if kwargs.get('rear'):
 			left_rear = right_rear = kwargs['rear']
-
 		if kwargs.get('left_all'):
 			left_front = left_mid = left_rear = kwargs['left_all']
-
 		if kwargs.get('right_all'):
 			right_front = right_mid = right_rear = kwargs['right_all']
-
 		if kwargs.get('all'):
 			left_front = left_mid = left_rear = right_front = right_mid = right_rear = kwargs['all']
 
@@ -375,11 +368,10 @@ class MiRoPublishers(MiRo):
 			frequency=None,
 			volume=None,
 			duration=None,
-			**kwargs
+			note=None
 	):
 		# Convert a string note (eg. "A4") to a frequency (eg. 440)
-		# MIT license
-		# From https://gist.github.com/CGrassin/26a1fdf4fc5de788da9b376ff717516e
+		# From https://gist.github.com/CGrassin/26a1fdf4fc5de788da9b376ff717516e - MIT license
 		def get_frequency(note, A4=440):
 			notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
 
@@ -394,14 +386,14 @@ class MiRoPublishers(MiRo):
 
 			return A4 * 2 ** ((key_number - 49) / 12)
 
-		# A note value in kwargs overrides the given frequency
-		if kwargs.get('note'):
+		# A note value overrides the specified frequency
+		if note is not None:
 			try:
-				frequency = get_frequency(kwargs['note'])
+				frequency = get_frequency(note)
 			except IndexError:
 				print('Please specify both note and octave value, eg. C4')
 			except ValueError:
-				print('{} is not a recognised note'.format(kwargs['note']))
+				print('{} is not a recognised note'.format(note))
 
 		# Frequency in Hz (values between 50 and 2000)
 		frequency = np.clip(
