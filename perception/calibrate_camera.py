@@ -24,7 +24,7 @@ criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 col = int(8)
 row = int(6)
 
-# Prepare object points, like (0,0,0), (1,0,0), (2,0,0) …,(6,5,0)
+# Prepare object points, like (0,0,0), (1,0,0), (2,0,0),..., (6,5,0)
 objp = np.zeros((row * col, 3), np.float32)
 objp[:, :2] = np.mgrid[0:col, 0:row].T.reshape(-1, 2)
 
