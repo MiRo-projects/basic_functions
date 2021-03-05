@@ -1,7 +1,7 @@
 import numpy as np
 
 # Audio
-# From http://labs.consequentialrobotics.com/miro-e/docs/index.php?page=Technical_Interfaces_ROS
+# See http://labs.consequentialrobotics.com/miro-e/docs/index.php?page=Technical_Interfaces_ROS
 BLOCK_SAMPLES = 500         # Sample rate of 20kHz and packages arriving at 40Hz == 500 samples per package
 BLOCK_RATE = 40             # Package arrival rate in Hz
 MICS = 4                    # Number of microphones on the robot
@@ -24,6 +24,30 @@ PRIW = {                    # Dimensions of audio salience map output
 	'height': 1
 }
 
+# Cosmetic joints
+DROOP = 0
+WAG = 0.5
+EYE = 0
+EAR = 0.333
+
+# Kinematic joints
+TILT = -6                   # Tilt DOF currently fixed
+LIFT = {                    # Head lift range
+	'min'  : 8,
+	'max'  : 60,
+	'calib': 34
+}
+YAW = {                     # Head yaw range
+	'min'  : -55,
+	'max'  : 55,
+	'calib': 0
+}
+PITCH = {                   # Head pitch range
+	'min'  : -22,
+	'max'  : 8,
+	'calib': 0
+}
+
 # Basic colours (as https://pypi.org/project/colour/ is not installed on MiRo)
 BGR_TUPLE = {
 	'red'    : (000, 000, 255),
@@ -44,6 +68,7 @@ ARGB_WORD = {
 	'magenta': 0xFFFF00FF,
 	'white'  : 0xFFFFFFFF,
 	'black'  : 0x00000000,
+	'off'    : 0x00000000,
 }
 
 # Image distortion
@@ -53,5 +78,5 @@ MTX = np.array([
 	[0, 1.03845278e+03, 1.68243114e+02],
 	[0, 0, 1]
 ])
-DIST = np.array([[-3.63299415e+00, 1.52661324e+01, -7.23780207e-03,- 7.48630198e-04, -3.20700124e+01]])
+DIST = np.array([[-3.63299415e+00, 1.52661324e+01, -7.23780207e-03, -7.48630198e-04, -3.20700124e+01]])
 FOCAL_LENGTH = 330

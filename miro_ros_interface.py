@@ -4,8 +4,9 @@ from sensor_msgs.msg import JointState, BatteryState, Image, Imu, Range, Compres
 from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, UInt8MultiArray, UInt16, UInt32, Int16MultiArray, String
 from miro2_msg import msg
 
-# MiRo-E parameters
+# MiRo-E modules and parameters
 import constants as con
+import miro2 as miro
 
 # Image handling
 import cv2
@@ -14,10 +15,12 @@ from PIL import ImageOps
 
 # Other imports
 import os
-import rospy
-import rosnode
+import math
 import numpy as np
-import miro2 as miro
+import rosnode
+import rospy
+
+
 
 
 class MiRo:
@@ -124,7 +127,7 @@ class MiRoPerception(MiRo):
 		# TODO: Use super() when moving to Python 3
 		MiRo.__init__(self)
 
-		# TODO: Add test for physical or simulated robot
+		# TODO: Add test for physical or simulated robot to switch this flag
 		self.opt = {'Uncompressed': False}
 
 		# Topic subscriptions
@@ -163,7 +166,9 @@ class MiRoPerception(MiRo):
 	def callback_mics(self, msg):
 		# Rescale data to be between -1 and +1
 		data = np.asarray(msg.data, 'float32') * (1.0 / 32768.0)
+
 		# Separate out samples from each microphone
+		# Samples in the order [LEFT, RIGHT, CENTRE, TAIL]
 		data = data.reshape((con.MICS, con.BLOCK_SAMPLES))
 		self.mics = {
 			'left'  : data[0],
@@ -283,12 +288,12 @@ class MiRoPublishers(MiRo):
 	# TODO: Add 'all' kwarg to define all / multiple joints in single array
 	def pub_cosmetic_joints(
 			self,
-			droop=0.5,
-			wag=0.5,
-			eye_left=0,
-			eye_right=0,
-			ear_left=0,
-			ear_right=0,
+			droop=con.DROOP,
+			wag=con.WAG,
+			eye_left=con.EYE,
+			eye_right=con.EYE,
+			ear_left=con.EAR,
+			ear_right=con.EAR,
 			**kwargs
 	):
 		# Normalised configuration of cosmetic joints
@@ -302,7 +307,6 @@ class MiRoPublishers(MiRo):
 		# Set multiple joints at once
 		if kwargs.get('eyes'):
 			eye_left = eye_right = kwargs['eyes']
-
 		if kwargs.get('ears'):
 			ear_left = ear_right = kwargs['ears']
 
@@ -313,36 +317,61 @@ class MiRoPublishers(MiRo):
 	# TODO: Convert these into more easily understandable values
 	def pub_kinematic_joints(
 			self,
-			tilt=0,
-			lift=0,
-			yaw=0,
-			pitch=0
+			lift=con.LIFT['calib'],
+			yaw=con.YAW['calib'],
+			pitch=con.PITCH['calib']
 	):
 		# Internal DOF configuration (radians) in the order [TILT, LIFT, YAW, PITCH]
-		self.kinematic_joints_msg.position = [tilt, lift, yaw, pitch]
+		self.kinematic_joints_msg.position = [
+			math.radians(con.TILT),
+			math.radians(
+				np.clip(
+					lift,
+					con.LIFT['min'],
+					con.LIFT['max']
+				)
+			),
+			math.radians(
+				np.clip(
+					yaw,
+					con.YAW['min'],
+					con.YAW['max']
+				)
+			),
+			math.radians(
+				np.clip(
+					pitch,
+					con.PITCH['min'],
+					con.PITCH['max']
+				)
+			),
+		]
+
 		self.kinematic_joints.publish(self.kinematic_joints_msg)
 
 	# Publish illumination
 	def pub_illum(
 			self,
-			left_front=0x00000000,
-			left_mid=0x00000000,
-			left_rear=0x00000000,
-			right_front=0x00000000,
-			right_mid=0x00000000,
-			right_rear=0x00000000,
+			left_front=con.ARGB_WORD['off'],
+			left_mid=con.ARGB_WORD['off'],
+			left_rear=con.ARGB_WORD['off'],
+			right_front=con.ARGB_WORD['off'],
+			right_mid=con.ARGB_WORD['off'],
+			right_rear=con.ARGB_WORD['off'],
 			**kwargs
 	):
 		# Commanded pattern for the six LEDs in the order [L FRONT, L MIDDLE, L REAR, R FRONT, R MIDDLE, R REAR]
 		# Each element is an ARGB word (0xAARRGGBB) where A is a brightness channel that scales the other three
 		for key in kwargs:
 			try:
+				# If a named colour is specified try to retrieve it from the colour list
 				kwargs[key] = con.ARGB_WORD[kwargs[key]]
-			# TODO: Add better error checking here (eg. if user tries to pass an RGB tuple)
 			except KeyError:
 				if isinstance(kwargs[key], str):
 					print('Unknown colour name provided')
 				else:
+					# Assume we received an ARGB word
+					# TODO: Add better error checking here (eg. if user tries to pass an RGB tuple)
 					pass
 
 		# Set multiple lights at once
@@ -396,11 +425,11 @@ class MiRoPublishers(MiRo):
 				print('{} is not a recognised note'.format(note))
 
 		# Frequency in Hz (values between 50 and 2000)
-		frequency = np.clip(
+		frequency = int(np.clip(
 			frequency,
 			con.TONE_FREQUENCY['min'],
 			con.TONE_FREQUENCY['max']
-		)
+		))
 
 		# Volume from 0 to 255
 		volume = np.clip(
