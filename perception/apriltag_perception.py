@@ -40,6 +40,7 @@ class AprilTagPerception:
 			tag = []
 			for t, r in enumerate(result):
 				tag.append(Tag())
+				# Apparent size is the mean length of all tag edges
 				tag[t].apparent_size = np.mean([
 					math.hypot(r.corners[1][0] - r.corners[0][0], r.corners[1][1] - r.corners[0][1]),
 					math.hypot(r.corners[2][0] - r.corners[1][0], r.corners[2][1] - r.corners[1][1]),

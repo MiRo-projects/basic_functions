@@ -5,7 +5,7 @@ from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, 
 from miro2_msg import msg
 
 # MiRo-E modules and parameters
-import constants as con
+from . import constants as con
 import miro2 as miro
 
 # Image handling
@@ -21,8 +21,6 @@ import rosnode
 import rospy
 
 
-
-
 class MiRo:
 	def __init__(self):
 		name = 'MiRo_ROS_interface'
@@ -32,7 +30,11 @@ class MiRo:
 
 		self.tr = '/' + os.getenv('MIRO_ROBOT_NAME') + '/'  # ROS topic root
 		self.qs = 2                                         # Publisher queue size
-		self.sleep = 0.5                                    # Initialisation sleep duration
+		self.sleep_time = 0.5                               # Initialisation sleep duration
+
+	@staticmethod
+	def sleep(time):
+		rospy.sleep(time)
 
 
 class MiRoCore(MiRo):
@@ -76,7 +78,7 @@ class MiRoCore(MiRo):
 		self.time = None
 
 		# Sleep for ROS initialisation
-		rospy.sleep(self.sleep)
+		self.sleep(self.sleep_time)
 
 	def callback_core_state(self, data):
 		# FIXME: Time of day seems to be integrated into state now
@@ -148,7 +150,7 @@ class MiRoPerception(MiRo):
 		self.mics = None
 
 		# Sleep for ROS initialisation
-		rospy.sleep(self.sleep)
+		self.sleep(self.sleep_time)
 
 	# TODO: Image stitching
 	def callback_caml(self, frame):
@@ -214,7 +216,7 @@ class MiRoSensors(MiRo):
 		self.sonar = None
 
 		# Sleep for ROS initialisation
-		rospy.sleep(self.sleep)
+		self.sleep(self.sleep_time)
 
 	def callback_sensors(self, sensors):
 		self.sensors = sensors
@@ -271,7 +273,7 @@ class MiRoPublishers(MiRo):
 		self.tone_msg = UInt16MultiArray()
 
 		# Sleep for ROS initialisation
-		rospy.sleep(self.sleep)
+		self.sleep(self.sleep_time)
 
 	# Publish wheel speeds (m/s)
 	def pub_cmd_vel_ms(self, left=0, right=0):
@@ -285,7 +287,6 @@ class MiRoPublishers(MiRo):
 		self.cmd_vel.publish(self.cmd_vel_msg)
 
 	# Publish cosmetic joint positions
-	# TODO: Add 'all' kwarg to define all / multiple joints in single array
 	def pub_cosmetic_joints(
 			self,
 			droop=con.DROOP,
@@ -314,7 +315,6 @@ class MiRoPublishers(MiRo):
 		self.cosmetic_joints.publish(self.cosmetic_joints_msg)
 
 	# Publish kinematic joint positions
-	# TODO: Convert these into more easily understandable values
 	def pub_kinematic_joints(
 			self,
 			lift=con.LIFT['calib'],

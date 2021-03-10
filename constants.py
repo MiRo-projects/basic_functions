@@ -15,11 +15,13 @@ TONE_VOLUME = {             # Published tone volume range
 }
 
 # Perception
-PRI = {                     # Dimensions of visual salience map output
+# Visual salience map dimensions
+PRI = {
 	'width' : 178,
 	'height': 100
 }
-PRIW = {                    # Dimensions of audio salience map output
+# Audio salience map dimensions
+PRIW = {
 	'width' : 256,
 	'height': 1
 }
@@ -31,6 +33,7 @@ EYE = 0
 EAR = 0.333
 
 # Kinematic joints
+# See http://labs.consequentialrobotics.com/miro-e/docs/index.php?page=Technical_Platform_Geometry
 TILT = -6                   # Tilt DOF currently fixed
 LIFT = {                    # Head lift range
 	'min'  : 8,
