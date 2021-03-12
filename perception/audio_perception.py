@@ -1,5 +1,5 @@
 import numpy as np
-import constants as con
+import miro_constants as con
 
 # TODO: Rewrite to take data as outputted from MRI
 

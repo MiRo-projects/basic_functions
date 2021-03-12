@@ -4,7 +4,7 @@ import math
 import numpy as np
 
 # MiRo-E parameters
-import constants as con
+import miro_constants as con
 
 
 class AprilTagPerception:

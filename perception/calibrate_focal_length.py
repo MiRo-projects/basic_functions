@@ -5,7 +5,7 @@ from apriltag_perception import AprilTagPerception
 import miro_ros_interface as mri
 
 # MiRo-E parameters
-import constants as con
+import miro_constants as con
 
 # USAGE: Set MiRo in front of an example AprilTag
 # (See here: https://april.eecs.umich.edu/software/apriltag)

@@ -6,7 +6,7 @@ miro_pub = MiRoPublishers()
 
 class IllumActions:
 	@staticmethod
-	def pulse(duration, colour, step: int = 5, speed: int = 100):
+	def pulse(pulses, colour, step: int = 5, speed: int = 100):
 		# Convert colour name to full RGB hex value (removing # character)
 		# TODO: Skip this if provided colour is already an RGB value
 		rgb = Color(colour).hex_l[1:]
@@ -19,9 +19,9 @@ class IllumActions:
 			miro_pub.pub_illum(all=argb)
 
 			# Sleep time is just reciprocal of speed
-			miro_pub.sleep(1 / speed)
+			miro_pub.ros_sleep(1 / speed)
 
-		for _ in range(duration):
+		for _ in range(pulses):
 			for a in range(0, 255, step):
 				pub_colour(a)
 			for a in range(255, 0, -step):

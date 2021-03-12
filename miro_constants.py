@@ -1,5 +1,6 @@
 import numpy as np
 
+#####
 # Audio
 # See http://labs.consequentialrobotics.com/miro-e/docs/index.php?page=Technical_Interfaces_ROS
 BLOCK_SAMPLES = 500         # Sample rate of 20kHz and packages arriving at 40Hz == 500 samples per package
@@ -14,6 +15,7 @@ TONE_VOLUME = {             # Published tone volume range
 	'max': 255
 }
 
+#####
 # Perception
 # Visual salience map dimensions
 PRI = {
@@ -26,31 +28,35 @@ PRIW = {
 	'height': 1
 }
 
+#####
 # Cosmetic joints
 DROOP = 0
 WAG = 0.5
 EYE = 0
 EAR = 0.333
 
-# Kinematic joints
+#####
+# Kinematic joints - movement ranges in degrees
 # See http://labs.consequentialrobotics.com/miro-e/docs/index.php?page=Technical_Platform_Geometry
-TILT = -6                   # Tilt DOF currently fixed
-LIFT = {                    # Head lift range
+# Tilt DOF currently fixed
+TILT = -6
+LIFT = {
 	'min'  : 8,
 	'max'  : 60,
 	'calib': 34
 }
-YAW = {                     # Head yaw range
+YAW = {
 	'min'  : -55,
 	'max'  : 55,
 	'calib': 0
 }
-PITCH = {                   # Head pitch range
+PITCH = {
 	'min'  : -22,
 	'max'  : 8,
 	'calib': 0
 }
 
+#####
 # Basic colours (as https://pypi.org/project/colour/ is not installed on MiRo)
 BGR_TUPLE = {
 	'red'    : (000, 000, 255),
@@ -74,6 +80,7 @@ ARGB_WORD = {
 	'off'    : 0x00000000,
 }
 
+#####
 # Image distortion
 # (It may be possible to derive better values by performing your own calibration!)
 MTX = np.array([

@@ -1,22 +1,20 @@
-# MiRo-E ROS interfaces
+# MiRo-E ROS message types
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import JointState, BatteryState, Image, Imu, Range, CompressedImage
 from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, UInt8MultiArray, UInt16, UInt32, Int16MultiArray, String
 from miro2_msg import msg
 
 # MiRo-E modules and parameters
-from . import constants as con
+from . import miro_constants as con
 import miro2 as miro
 
-# Image handling
+# Other packages
+# import base64
 import cv2
-from PIL import Image as Im
-from PIL import ImageOps
-
-# Other imports
-import os
+import datetime
 import math
 import numpy as np
+import os
 import rosnode
 import rospy
 
@@ -33,7 +31,8 @@ class MiRo:
 		self.sleep_time = 0.5                               # Initialisation sleep duration
 
 	@staticmethod
-	def sleep(time):
+	def ros_sleep(time):
+		# Sleep after init to prevent accessing data before a topic is subscribed
 		rospy.sleep(time)
 
 
@@ -56,51 +55,49 @@ class MiRoCore(MiRo):
 		rospy.Subscriber(self.tr + 'core/prir', Image, self.callback_prir)
 		rospy.Subscriber(self.tr + 'core/priw', Image, self.callback_priw)
 		# Selection
-		rospy.Subscriber(self.tr + 'core/selection/priority', Float32MultiArray, self.callback_selection_priority)
 		rospy.Subscriber(self.tr + 'core/selection/inhibition', Float32MultiArray, self.callback_selection_inhibition)
+		rospy.Subscriber(self.tr + 'core/selection/priority', Float32MultiArray, self.callback_selection_priority)
 		# Motivation
 		rospy.Subscriber(self.tr + 'motivation', Float32MultiArray, self.callback_motivation)
 
 		# Default data
-		self.affect = None
 		# self.core_detect_objects_l = None
 		# self.core_detect_objects_r = None
 		# self.core_detect_ball_l = None
 		# self.core_detect_ball_r = None
 		# self.core_detect_face_l = None
 		# self.core_detect_face_r = None
+		self.emotion = None
+		self.mood = None
 		self.motivation = None
 		self.pril = None
 		self.prir = None
 		self.priw = None
-		self.selection_priority = None
 		self.selection_inhibition = None
+		self.selection_priority = None
+		self.sleep = None
 		self.time = None
 
 		# Sleep for ROS initialisation
-		self.sleep(self.sleep_time)
+		self.ros_sleep(self.sleep_time)
 
 	def callback_core_state(self, data):
-		# FIXME: Time of day seems to be integrated into state now
-		self.affect = data
-
-		# Convert 'time of day' value into a 12hr value with half-hour precision
-		# TODO: There's surely a neater way of doing this
-		self.time = round(0.5 * round((24 * data.time_of_day) / 0.5), 2)
-		if self.time > 12.5:
-			self.time = self.time - 12
+		self.emotion = data.emotion
+		self.mood = data.mood
+		self.sleep = data.sleep
+		self.time = datetime.timedelta(data.time_of_day)
 
 	def callback_motivation(self, data):
 		self.motivation = data
 
 	def callback_pril(self, frame):
-		self.pril = self.process_pri(frame)
+		self.pril = self.process_pri(frame, con.PRI)
 
 	def callback_prir(self, frame):
-		self.prir = self.process_pri(frame)
+		self.prir = self.process_pri(frame, con.PRI)
 
 	def callback_priw(self, frame):
-		self.priw = self.process_priw(frame)
+		self.priw = self.process_pri(frame, con.PRIW)
 
 	def callback_selection_priority(self, data):
 		self.selection_priority = data
@@ -109,18 +106,11 @@ class MiRoCore(MiRo):
 		self.selection_inhibition = data
 
 	@staticmethod
-	def process_pri(frame):
-		# TODO: Convert to image type with full alpha channel and make background transparent
-		# Get monochrome image
-		pri = Im.frombytes('L', (con.PRI['width'], con.PRI['height']), np.fromstring(frame.data, np.uint8), 'raw')
-
-		# Invert image for overlaying
-		return ImageOps.invert(pri)
-
-	@staticmethod
-	def process_priw(frame):
-		# Get monochrome image
-		return Im.frombytes('L', (con.PRIW['width'], con.PRIW['height']), np.fromstring(frame.data, np.uint8), 'raw')
+	def process_pri(frame, dim):
+		# Resize frame data to form an OpenCV image array
+		image_array = np.frombuffer(frame.data, np.uint8)
+		image_array.resize((dim['height'], dim['width']))
+		return image_array
 
 
 class MiRoPerception(MiRo):
@@ -150,7 +140,7 @@ class MiRoPerception(MiRo):
 		self.mics = None
 
 		# Sleep for ROS initialisation
-		self.sleep(self.sleep_time)
+		self.ros_sleep(self.sleep_time)
 
 	# TODO: Image stitching
 	def callback_caml(self, frame):
@@ -181,22 +171,12 @@ class MiRoPerception(MiRo):
 
 	@staticmethod
 	def process_frame(frame):
-		# Decode image from numpy string format
-		frame_out = cv2.imdecode(np.fromstring(frame.data, np.uint8), cv2.IMREAD_COLOR)
+		# Convert frame data to an OpenCV image array
+		frame_array = np.frombuffer(frame.data, np.uint8)
+		image_array = cv2.imdecode(frame_array, cv2.IMREAD_UNCHANGED)
+		image_undistorted = cv2.undistort(image_array, con.MTX, con.DIST, None)
 
-		# Convert image to RGB order
-		# frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
-
-		# TODO: Can we convert directly from source in a single step?
-		# return Im.frombytes('RGB', (320, 176), np.fromstring(frame.data, np.uint8), 'raw')
-		# return Im.frombytes('RGB', (182, 100), np.fromstring(frame.data, np.uint8), 'jpeg')
-
-		# Undistort image
-		frame_undistorted = cv2.undistort(frame_out, con.MTX, con.DIST, None)
-
-		# Convert to image format - default output for unmodified frame is 640x360
-		# return Im.fromarray(frame_rgb)
-		return {'normal': frame_out, 'undistorted': frame_undistorted}
+		return {'normal': image_array, 'undistorted': image_undistorted}
 
 
 class MiRoSensors(MiRo):
@@ -216,7 +196,7 @@ class MiRoSensors(MiRo):
 		self.sonar = None
 
 		# Sleep for ROS initialisation
-		self.sleep(self.sleep_time)
+		self.ros_sleep(self.sleep_time)
 
 	def callback_sensors(self, sensors):
 		self.sensors = sensors
@@ -273,7 +253,7 @@ class MiRoPublishers(MiRo):
 		self.tone_msg = UInt16MultiArray()
 
 		# Sleep for ROS initialisation
-		self.sleep(self.sleep_time)
+		self.ros_sleep(self.sleep_time)
 
 	# Publish wheel speeds (m/s)
 	def pub_cmd_vel_ms(self, left=0, right=0):
@@ -401,19 +381,19 @@ class MiRoPublishers(MiRo):
 	):
 		# Convert a string note (eg. "A4") to a frequency (eg. 440)
 		# From https://gist.github.com/CGrassin/26a1fdf4fc5de788da9b376ff717516e - MIT license
-		def get_frequency(note, A4=440):
+		def get_frequency(n, a4=440):
 			notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
 
-			octave = int(note[2]) if len(note) == 3 else int(note[1])
+			octave = int(n[2]) if len(n) == 3 else int(n[1])
 
-			key_number = notes.index(note[0:-1])
+			key_number = notes.index(n[0:-1])
 
 			if key_number < 3:
 				key_number = key_number + 12 + ((octave - 1) * 12) + 1
 			else:
 				key_number = key_number + ((octave - 1) * 12) + 1
 
-			return A4 * 2 ** ((key_number - 49) / 12)
+			return a4 * 2 ** ((key_number - 49) / 12)
 
 		# A note value overrides the specified frequency
 		if note is not None:
