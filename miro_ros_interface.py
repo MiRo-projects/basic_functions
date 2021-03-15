@@ -5,7 +5,8 @@ from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, 
 from miro2_msg import msg
 
 # MiRo-E modules and parameters
-from . import miro_constants as con
+# from . import miro_constants as con
+import miro_constants as con
 import miro2 as miro
 
 # Other packages
@@ -39,6 +40,7 @@ class MiRo:
 class MiRoCore(MiRo):
 	def __init__(self):
 		# TODO: Use super() when moving to Python 3
+		# TODO: Add init test to check if demo code is running
 		MiRo.__init__(self)
 
 		# Topic subscriptions
@@ -91,25 +93,25 @@ class MiRoCore(MiRo):
 		self.motivation = data
 
 	def callback_pril(self, frame):
-		self.pril = self.process_pri(frame, con.PRI)
+		self.pril = self.process_pri(frame, height=con.PRI['height'], width=con.PRI['width'])
 
 	def callback_prir(self, frame):
-		self.prir = self.process_pri(frame, con.PRI)
+		self.prir = self.process_pri(frame, height=con.PRI['height'], width=con.PRI['width'])
 
 	def callback_priw(self, frame):
-		self.priw = self.process_pri(frame, con.PRIW)
-
-	def callback_selection_priority(self, data):
-		self.selection_priority = data
+		self.priw = self.process_pri(frame, height=con.PRIW['height'], width=con.PRIW['width'])
 
 	def callback_selection_inhibition(self, data):
 		self.selection_inhibition = data
 
+	def callback_selection_priority(self, data):
+		self.selection_priority = data
+
 	@staticmethod
-	def process_pri(frame, dim):
+	def process_pri(frame, height, width):
 		# Resize frame data to form an OpenCV image array
 		image_array = np.frombuffer(frame.data, np.uint8)
-		image_array.resize((dim['height'], dim['width']))
+		image_array.resize((height, width))
 		return image_array
 
 
@@ -144,16 +146,10 @@ class MiRoPerception(MiRo):
 
 	# TODO: Image stitching
 	def callback_caml(self, frame):
-		# self.caml = self.process_frame(frame)
-		image = self.process_frame(frame)
-		self.caml = image['normal']
-		self.caml_undistorted = image['undistorted']
+		[self.caml, self.caml_undistorted] = self.process_frame(frame)
 
 	def callback_camr(self, frame):
-		# self.camr = self.process_frame(frame)
-		image = self.process_frame(frame)
-		self.camr = image['normal']
-		self.camr_undistorted = image['undistorted']
+		[self.camr, self.camr_undistorted] = self.process_frame(frame)
 
 	def callback_mics(self, msg):
 		# Rescale data to be between -1 and +1
@@ -174,9 +170,10 @@ class MiRoPerception(MiRo):
 		# Convert frame data to an OpenCV image array
 		frame_array = np.frombuffer(frame.data, np.uint8)
 		image_array = cv2.imdecode(frame_array, cv2.IMREAD_UNCHANGED)
+		# image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
 		image_undistorted = cv2.undistort(image_array, con.MTX, con.DIST, None)
 
-		return {'normal': image_array, 'undistorted': image_undistorted}
+		return image_array, image_undistorted
 
 
 class MiRoSensors(MiRo):
