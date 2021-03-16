@@ -87,7 +87,8 @@ class MiRoCore(MiRo):
 		self.emotion = data.emotion
 		self.mood = data.mood
 		self.sleep = data.sleep
-		self.time = datetime.timedelta(data.time_of_day)
+		timedelta = datetime.timedelta(data.time_of_day)
+		self.time = datetime.datetime.strptime(str(timedelta), '%H:%M:%S.%f').time()
 
 	def callback_motivation(self, data):
 		self.motivation = data
