@@ -4,7 +4,7 @@ from miro_ros_interface import MiRoPublishers
 miro_pub = MiRoPublishers()
 
 
-class IllumActions:
+class IlluminationActions:
 	@staticmethod
 	def pulse(pulses, colour, step: int = 5, speed: int = 100):
 		# Convert colour name to full RGB hex value (removing # character)
@@ -28,3 +28,21 @@ class IllumActions:
 				pub_colour(a)
 
 	# TODO: Create 'sweep' action that sweeps a pulse forwards or backwards
+
+
+class CosmeticActions:
+	@staticmethod
+	def wag(wags, speed: int = 5):
+		for _ in range(wags):
+			miro_pub.pub_cosmetic_joints(wag=0)
+			miro_pub.ros_sleep(1 / speed)
+			miro_pub.pub_cosmetic_joints(wag=1)
+			miro_pub.ros_sleep(1 / speed)
+
+	@staticmethod
+	def blink(blinks, speed: int = 5):
+		for _ in range(blinks):
+			miro_pub.pub_cosmetic_joints(eyes=0)
+			miro_pub.ros_sleep(1 / speed)
+			miro_pub.pub_cosmetic_joints(eyes=1)
+			miro_pub.ros_sleep(1 / speed)

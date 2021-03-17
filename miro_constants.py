@@ -29,34 +29,6 @@ PRIW = {
 }
 
 #####
-# Cosmetic joints
-DROOP = 0
-WAG = 0.5
-EYE = 0
-EAR = 0.333
-
-#####
-# Kinematic joints - movement ranges in degrees
-# See http://labs.consequentialrobotics.com/miro-e/docs/index.php?page=Technical_Platform_Geometry
-# Tilt DOF currently fixed
-TILT = -6
-LIFT = {
-	'min'  : 8,
-	'max'  : 60,
-	'calib': 34
-}
-YAW = {
-	'min'  : -55,
-	'max'  : 55,
-	'calib': 0
-}
-PITCH = {
-	'min'  : -22,
-	'max'  : 8,
-	'calib': 0
-}
-
-#####
 # Basic colours (as https://pypi.org/project/colour/ is not installed on MiRo)
 BGR_TUPLE = {
 	'red'    : (000, 000, 255),
