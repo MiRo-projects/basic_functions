@@ -96,7 +96,11 @@ class MiRoCore(MiRo):
 		self.sleep = data.sleep
 		self.time_raw = data.time_of_day
 		timedelta = datetime.timedelta(self.time_raw)
-		self.time = datetime.datetime.strptime(str(timedelta), '%H:%M:%S.%f').time()
+		try:
+			self.time = datetime.datetime.strptime(str(timedelta), '%H:%M:%S.%f').time()
+		except ValueError:
+			# Catch errors when microseconds == 0
+			self.time = datetime.datetime.strptime(str(timedelta), '%H:%M:%S').time()
 
 	def callback_motivation(self, data):
 		self.motivation = data
