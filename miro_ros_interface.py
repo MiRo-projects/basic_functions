@@ -5,8 +5,10 @@ from std_msgs.msg import Float32MultiArray, UInt32MultiArray, UInt16MultiArray, 
 from miro2_msg import msg
 
 # MiRo-E modules and parameters
-# from . import miro_constants as con
-import miro_constants as con
+try:
+	from . import miro_constants as con
+except ImportError:
+	import miro_constants as con
 import miro2 as miro
 
 # Other packages
@@ -22,8 +24,8 @@ import rospy
 class MiRo:
 	def __init__(self):
 		name = 'MiRo_ROS_interface'
+		# Initialise ROS node ('disable_rostime=True' needed to work in PyCharm)
 		if name not in rosnode.get_node_names():
-			# Initialise ROS node ('disable_rostime=True' needed to work in PyCharm)
 			rospy.init_node(name, anonymous=True, disable_rostime="PYCHARM_HOSTED" in os.environ)
 			
 		# ROS topic root
@@ -83,6 +85,7 @@ class MiRoCore(MiRo):
 		self.selection_priority = None
 		self.sleep = None
 		self.time = None
+		self.time_raw = None
 
 		# Sleep for ROS initialisation
 		self.ros_sleep(self.sleep_time)
@@ -91,7 +94,8 @@ class MiRoCore(MiRo):
 		self.emotion = data.emotion
 		self.mood = data.mood
 		self.sleep = data.sleep
-		timedelta = datetime.timedelta(data.time_of_day)
+		self.time_raw = data.time_of_day
+		timedelta = datetime.timedelta(self.time_raw)
 		self.time = datetime.datetime.strptime(str(timedelta), '%H:%M:%S.%f').time()
 
 	def callback_motivation(self, data):
@@ -296,10 +300,10 @@ class MiRoPublishers(MiRo):
 		if eye_left == 'closed': eye_left = 1
 		if eye_right == 'open': eye_right = 0
 		if eye_right == 'closed': eye_right = 1
-		if ear_left == 'open': ear_left = 0
-		if ear_left == 'closed': ear_left = 1
-		if ear_right == 'open': ear_right = 0
-		if ear_right == 'closed': ear_right = 1
+		if ear_left in ('inwards', 'in'): ear_left = 0
+		if ear_left in ('outwards', 'out'): ear_left = 1
+		if ear_right in ('inwards', 'in'): ear_right = 0
+		if ear_right in ('outwards', 'out'): ear_right = 1
 
 		# Set multiple joints at once
 		if 'eyes' in kwargs.keys():
@@ -399,9 +403,7 @@ class MiRoPublishers(MiRo):
 		# From https://gist.github.com/CGrassin/26a1fdf4fc5de788da9b376ff717516e - MIT license
 		def get_frequency(n, a4=440):
 			notes = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
-
 			octave = int(n[2]) if len(n) == 3 else int(n[1])
-
 			key_number = notes.index(n[0:-1])
 
 			if key_number < 3:
@@ -412,13 +414,14 @@ class MiRoPublishers(MiRo):
 			return a4 * 2 ** ((key_number - 49) / 12)
 
 		# A note value overrides the specified frequency
-		if note is not None:
-			try:
-				frequency = get_frequency(note)
-			except IndexError:
-				print('Please specify both note and octave value, eg. C4')
-			except ValueError:
-				print('{} is not a recognised note'.format(note))
+		try:
+			frequency = get_frequency(note)
+		except IndexError:
+			print('Please specify both note and octave value, eg. C4')
+		except ValueError:
+			print('{} is not a recognised note'.format(note))
+		except TypeError:
+			pass
 
 		# Frequency in Hz (values between 50 and 2000)
 		frequency = int(np.clip(
