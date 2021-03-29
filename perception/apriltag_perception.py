@@ -58,7 +58,7 @@ class AprilTagPerception:
 
 		return tag
 
-	def draw_box(self, image, tag, colour=(0, 0, 0), width=250):
+	def draw_box(self, image, tag, colour=(0, 0, 0), width=200):
 		# Verify colour name or format
 		colour = self.check_colour(colour)
 

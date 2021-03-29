@@ -267,7 +267,12 @@ class MiRoPublishers(MiRo):
 
 	# Publish wheel speeds (m/s)
 	def pub_cmd_vel_ms(self, left=0, right=0):
-		(dr, dtheta) = miro.lib.miro_utils.wheel_speed2cmd_vel([left, right])
+		try:
+			# Python 2 MDK
+			(dr, dtheta) = miro.utils.wheel_speed2cmd_vel([left, right])
+		except AttributeError:
+			# Python 3 MDK
+			(dr, dtheta) = miro.lib.miro_utils.wheel_speed2cmd_vel([left, right])
 		self.pub_cmd_vel_rad(dr, dtheta)
 
 	# Publish wheel speeds (radians)
